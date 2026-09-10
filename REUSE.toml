@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# REUSE (https://reuse.software) configuration.
+#
+# Source files carry their own SPDX headers; this file covers the file types
+# that cannot hold a comment header, and sets the project default so that a new
+# file added without a header is still unambiguously licensed.
+
+version = 1
+
+# --- project default ------------------------------------------------------
+
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "2026 Leonidas Zervas and Damavik contributors"
+SPDX-License-Identifier = "GPL-3.0-only"
+
+# --- third-party / vendored content ---------------------------------------
+# Nothing is vendored. When something is, list it here with its own licence.
+
+# --- files that are not copyrightable, or whose licence is not ours --------
+
+[[annotations]]
+path = [".gitignore"]
+SPDX-FileCopyrightText = "2026 Leonidas Zervas and Damavik contributors"
+SPDX-License-Identifier = "GPL-3.0-only"
+
+[[annotations]]
+path = ["LICENSE"]
+SPDX-FileCopyrightText = "1989, 1991, 2007 Free Software Foundation, Inc."
+SPDX-License-Identifier = "GPL-3.0-only"
+
+# --- data fixtures: content, not code -------------------------------------
+
+[[annotations]]
+path = ["tests/fixtures/**"]
+SPDX-FileCopyrightText = "2026 Leonidas Zervas and Damavik contributors"
+SPDX-License-Identifier = "GPL-3.0-only"
+
+# Test fixtures contain deliberately suspicious values (fake hashes,
+# example.com hosts). They are inert: nothing is executable and nothing is
+# fetched by the test suite.
