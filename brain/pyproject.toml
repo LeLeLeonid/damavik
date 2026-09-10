@@ -1,0 +1,93 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "damavik"
+version = "0.1.0"
+description = "Local-first host threat monitor: process, flow, DNS and package scoring with graphs, no cloud required"
+readme = "../README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-3.0-only" }
+authors = [{ name = "Leonidas Zervas and Damavik contributors" }]
+keywords = ["security", "monitoring", "edr", "ebpf", "osquery", "local-first", "offline"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Security",
+  "Topic :: System :: Monitoring",
+]
+
+# Deliberately empty. The brain runs on the Python standard library only:
+# stdlib gives us sqlite3, http.server, json, hashlib, ipaddress, threading and
+# tomllib. YAML is covered by damavik/miniyaml.py (a tested subset loader), and
+# file matching is delegated to the Rust sensor where yara-x lives.
+# See the README for the rationale.
+dependencies = []
+
+[project.optional-dependencies]
+# Optional, never required.
+yaml = ["PyYAML>=6.0"]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.urls]
+Homepage = "https://github.com/LeLeLeonid/damavik"
+Repository = "https://github.com/LeLeLeonid/damavik"
+Issues = "https://github.com/LeLeLeonid/damavik/issues"
+Documentation = "https://github.com/LeLeLeonid/damavik/tree/main/docs"
+
+[project.scripts]
+damavik = "damavik.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "." }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["damavik*"]
+
+[tool.setuptools.package-data]
+damavik = ["dash/static/*"]
+
+[tool.pytest.ini_options]
+# Kept in the repo root workflow rather than here so that `pytest` works from
+# either directory; testpaths is intentionally unset.
+addopts = "-q"
+filterwarnings = ["error::DeprecationWarning:damavik.*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "F",   # pyflakes
+  "I",   # isort
+  "UP",  # pyupgrade
+  "B",   # bugbear
+  "C4",  # comprehensions
+  "SIM", # simplify
+  "RET", # return
+]
+ignore = [
+  "B008",  # function call in default argument: argparse patterns
+  "SIM108", # ternary: explicit if/else reads better in scoring code
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011", "SIM300"]
+
+[tool.ruff.format]
+quote-style = "double"

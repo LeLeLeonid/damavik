@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Egress to an unusual service port
+id: DMK-N-001
+status: stable
+level: medium
+description: >-
+  Endpoints have no business talking to IRC or the classic listener ports.
+tags:
+  - attack.command_and_control
+  - attack.t1571
+logsource:
+  category: network_connect
+selection:
+  net.dport:
+    - 1337
+    - 4444
+    - 5555
+    - 6666
+    - 6667
+    - 6697
+    - 31337
+    - 12345
+condition: selection

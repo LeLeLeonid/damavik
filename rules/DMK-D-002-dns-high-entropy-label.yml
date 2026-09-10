@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: High-entropy DNS label
+id: DMK-D-002
+status: stable
+level: medium
+description: >-
+  A label of 12+ characters carrying 90% of the maximum entropy possible for
+  its length looks like base32/base64 payload, not like a hostname.  The ratio
+  is used instead of raw bits per character because a label of length n can
+  never exceed log2(n) bits - a fixed bit threshold silently favours longer
+  labels.
+tags:
+  - attack.exfiltration
+  - attack.t1071.004
+logsource:
+  category: dns_query
+selection:
+  meta.dns_label_len|gte: 12
+  meta.dns_entropy_ratio|gte: 0.9
+condition: selection

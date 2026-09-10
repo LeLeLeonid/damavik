@@ -1,0 +1,102 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# CI. Two promises this workflow keeps:
+#
+#   1. The Python job needs NO services, NO root and NO network. If a change
+#      makes the suite depend on any of those, that is the failure.
+#   2. Performance budgets are gates, not suggestions.
+#
+# No Rust job yet: sensor/ does not exist until P1. Adding one before there is
+# something to compile would mean a permanently red (or permanently ignored) job.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: brain (python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dev tools
+        run: python -m pip install --upgrade pip pytest ruff
+
+      - name: Lint
+        run: ruff check brain tests
+
+      - name: Format check
+        run: ruff format --check brain tests
+
+      - name: Unit tests
+        run: pytest tests/ -q
+
+      - name: End-to-end self-test (offline, no root)
+        working-directory: brain
+        run: python -m damavik.cli --offline selftest
+
+      - name: Performance budgets
+        working-directory: brain
+        run: python -m damavik.cli --offline bench --events 5000 --gate
+
+  rules:
+    name: rules and schema
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Every rule loads and has TP+FP fixtures
+        run: pytest tests/test_rules.py -q
+
+      - name: Every fixture validates against the schema
+        run: |
+          cd brain
+          for f in ../tests/fixtures/*.jsonl; do
+            python -m damavik.cli validate "$f"
+          done
+
+      - name: Published JSON schemas match the Python validator
+        run: pytest tests/test_schema.py -q
+
+      - name: Privacy invariants
+        run: pytest tests/test_privacy.py -q
+
+  reuse:
+    name: licensing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: REUSE compliance
+        uses: fsfe/reuse-action@v5

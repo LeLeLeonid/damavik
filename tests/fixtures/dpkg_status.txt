@@ -1,0 +1,26 @@
+Package: libfoo
+Status: install ok installed
+Priority: optional
+Architecture: amd64
+Version: 1.2.3
+Description: example library with a parser
+ long description line that continues
+ and spans several lines
+
+Package: netcat-openbsd
+Status: install ok installed
+Architecture: amd64
+Version: 1.226-1
+Description: TCP/IP swiss army knife
+
+Package: removed-thing
+Status: deinstall ok config-files
+Architecture: amd64
+Version: 0.1
+
+Package: zlib1g
+Status: install ok installed
+Architecture: amd64
+Version: 1:1.2.13.dfsg-1
+Description: compression library
+

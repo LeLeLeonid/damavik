@@ -1,0 +1,385 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+"""CLI: every subcommand is reachable, JSON-capable and exits honestly."""
+
+from __future__ import annotations
+
+import json
+import os
+
+import pytest
+
+from damavik.cli import main
+
+FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
+CHAIN = os.path.join(FIXTURES, "attack-chain.jsonl")
+DPKG = os.path.join(FIXTURES, "dpkg_status.txt")
+OSV_DIR = os.path.join(FIXTURES, "osv")
+
+
+@pytest.fixture()
+def cli(tmp_path, repo_root, rules_dir):  # noqa: ANN001
+    def run(*args, expect=0):
+        argv = [
+            "--state-dir", str(tmp_path),
+            "--rules-dir", rules_dir,
+            "--offline",
+            *args,
+        ]
+        code = main(argv)
+        assert code == expect, f"{args} exited {code}"
+        return code
+
+    return run
+
+
+def test_version(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--version"])
+    assert exc.value.code == 0
+    assert "damavik" in capsys.readouterr().out
+
+
+def test_no_command_is_an_error():
+    with pytest.raises(SystemExit) as exc:
+        main([])
+    assert exc.value.code == 2
+
+
+def test_run_then_status(cli, capsys):
+    cli("run", "--file", CHAIN)
+    capsys.readouterr()
+    cli("status", "--json")
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["events"] == 35
+    assert summary["alerts"] > 0
+    assert summary["offline"] is True
+    assert summary["rules"] >= 15
+
+
+def test_status_human_readable(cli, capsys):
+    cli("status")
+    assert "events" in capsys.readouterr().out
+
+
+def test_demo(cli, capsys):
+    cli("demo", "--fixture", CHAIN, "--json")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["stats"]["events"] == 35
+    assert payload["alerts"]
+
+
+def test_demo_counts_are_not_the_display_limit(cli, capsys):
+    cli("demo", "--fixture", CHAIN, "--limit", "3")
+    out = capsys.readouterr().out
+    assert "processed 35 events" in out
+    assert "showing 3" in out
+
+
+def test_alerts_json_and_human(cli, capsys):
+    cli("run", "--file", CHAIN)
+    capsys.readouterr()
+    cli("alerts", "--limit", "5", "--json")
+    alerts = json.loads(capsys.readouterr().out)
+    assert len(alerts) == 5
+    assert all(alert["explain"] for alert in alerts)
+    cli("alerts", "--limit", "5", "-v")
+    out = capsys.readouterr().out
+    assert "why" in out
+    assert "iocs" in out
+
+
+def test_alerts_empty_state(cli, capsys):
+    cli("alerts")
+    assert "no alerts" in capsys.readouterr().out
+
+
+def test_ps_tree(cli, capsys):
+    cli("run", "--file", CHAIN)
+    capsys.readouterr()
+    cli("ps-tree")
+    out = capsys.readouterr().out
+    assert "soffice.bin" in out
+    cli("ps-tree", "--json")
+    roots = json.loads(capsys.readouterr().out)
+    assert isinstance(roots, list) and roots
+
+
+def test_ps_tree_empty(cli, capsys):
+    cli("ps-tree")
+    assert "no processes" in capsys.readouterr().out
+
+
+def test_flows(cli, capsys):
+    cli("run", "--file", CHAIN)
+    capsys.readouterr()
+    cli("flows", "--pid", "3000", "--json")
+    rows = json.loads(capsys.readouterr().out)
+    assert rows and all(row["pid"] == 3000 for row in rows)
+
+
+def test_flows_empty(cli, capsys):
+    cli("flows")
+    assert "no flows" in capsys.readouterr().out
+
+
+def test_top_risks(cli, capsys):
+    cli("run", "--file", CHAIN)
+    capsys.readouterr()
+    cli("top-risks", "--limit", "5", "--json")
+    rows = json.loads(capsys.readouterr().out)
+    scores = [row["score"] for row in rows]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_tail_once(cli, capsys):
+    cli("run", "--file", CHAIN)
+    capsys.readouterr()
+    cli("tail", "--once", "--json")
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+    assert lines
+    assert all(json.loads(line)["ts"] for line in lines)
+
+
+def test_tail_alerts_only(cli, capsys):
+    cli("run", "--file", CHAIN)
+    capsys.readouterr()
+    cli("tail", "--once", "--alerts-only")
+    out = capsys.readouterr().out
+    assert "dns.query" in out or "proc.exec" in out
+
+
+def test_verify_ok(cli, capsys):
+    cli("run", "--file", CHAIN)
+    capsys.readouterr()
+    cli("verify", "--json")
+    report = json.loads(capsys.readouterr().out)
+    assert report["ok"] is True
+    assert report["entries"] > 0
+
+
+def test_verify_detects_tampering(cli, capsys, tmp_path):
+    cli("run", "--file", CHAIN)
+    capsys.readouterr()
+    journal = tmp_path / "journal.jsonl"
+    lines = journal.read_text(encoding="utf-8").splitlines()
+    record = json.loads(lines[0])
+    record["rec"]["event"]["score"] = 99.0          # a real semantic change
+    lines[0] = json.dumps(record, sort_keys=True)
+    journal.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    cli("verify", "--json", expect=2)
+    report = json.loads(capsys.readouterr().out)
+    assert report["ok"] is False
+    assert report["first_bad_line"] == 1
+
+
+def test_reserialising_a_record_is_not_tampering(cli, capsys, tmp_path):
+    """Canonical hashing means different JSON spacing still verifies."""
+    cli("run", "--file", CHAIN)
+    capsys.readouterr()
+    journal = tmp_path / "journal.jsonl"
+    lines = journal.read_text(encoding="utf-8").splitlines()
+    respaced = [json.dumps(json.loads(line), sort_keys=True) for line in lines]
+    assert respaced[0] != lines[0]                  # genuinely different bytes
+    journal.write_text("\n".join(respaced) + "\n", encoding="utf-8")
+    cli("verify", "--json")
+    assert json.loads(capsys.readouterr().out)["ok"] is True
+
+
+def test_validate_fixture(cli, capsys):
+    cli("validate", CHAIN)
+    assert "validated 35 lines" in capsys.readouterr().out
+
+
+def test_validate_reports_bad_events(cli, capsys, tmp_path):
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text(
+        "\n".join(
+            [
+                '{"ts":"2026-09-10T10:00:00Z","type":"proc.exec",'
+                '"proc":{"pid":1,"sha256":"not-a-hash"}}',
+                '{"ts":"2026-09-10T10:00:01Z","type":"net.flow",'
+                '"net":{"dst":"1.2.3.4","dport":99999}}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    cli("validate", str(bad), expect=1)
+    out = capsys.readouterr().out
+    assert "2 invalid" in out
+    assert "sha256" in out and "dport" in out
+
+
+def test_validate_rejects_unparseable_lines(cli, capsys, tmp_path):
+    bad = tmp_path / "junk.jsonl"
+    bad.write_text("not json at all\n", encoding="utf-8")
+    cli("validate", str(bad), expect=1)
+    assert "bad-json" in capsys.readouterr().out
+
+
+def test_validate_accepts_an_unknown_type_but_records_it(cli, capsys, tmp_path):
+    """A newer sensor must not be rejected - just labelled."""
+    odd = tmp_path / "odd.jsonl"
+    odd.write_text('{"ts":"2026-09-10T10:00:00Z","type":"future.event"}\n', encoding="utf-8")
+    cli("validate", str(odd))
+    assert "validated 1 lines" in capsys.readouterr().out
+    from damavik.normalize import read_file
+
+    event = next(iter(read_file(str(odd))))
+    assert event["type"] == "sensor.meta"
+    assert event["meta"]["original_type"] == "future.event"
+
+
+def test_selftest(cli, capsys, repo_root, monkeypatch):
+    monkeypatch.chdir(repo_root)
+    cli("selftest", "--json")
+    report = json.loads(capsys.readouterr().out)
+    assert report["ok"] is True, report["failures"]
+    assert report["stats"]["alerts"] > 0
+    assert report["journal"]["ok"] is True
+
+
+def test_selftest_fails_when_the_fixture_is_missing(cli, capsys, tmp_path):
+    cli("selftest", "--fixture", str(tmp_path / "nope.jsonl"), "--json", expect=1)
+    report = json.loads(capsys.readouterr().out)
+    assert report["ok"] is False
+    assert report["failures"]
+
+
+def test_pkg_scan_and_list(cli, capsys):
+    cli("osv-sync", "--dir", OSV_DIR, "--index", "--json")
+    capsys.readouterr()
+    cli("pkg-list", "--scan", "--dpkg-status", DPKG, "--osv-dir", OSV_DIR, "--json")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["scan"]["scanned"] == 3
+    assert payload["scan"]["changes"] == 3
+    cli("pkg-list", "--osv-dir", OSV_DIR, "--json")
+    payload = json.loads(capsys.readouterr().out)
+    names = {pkg["name"] for pkg in payload["packages"]}
+    assert "libfoo" in names
+    assert any(item["name"] == "libfoo" for item in payload["vulnerable"])
+
+
+def test_osv_sync_reports_counts(cli, capsys):
+    cli("osv-sync", "--dir", OSV_DIR, "--index", "--json")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["advisories"] >= 3
+    assert payload["rows_indexed"] > 0
+
+
+def test_osv_sync_without_a_directory_hints(cli, capsys, tmp_path):
+    cli("osv-sync", "--dir", str(tmp_path / "empty"), "--json")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["advisories"] == 0
+
+
+def test_purge_requires_confirmation(cli, capsys):
+    cli("run", "--file", CHAIN)
+    capsys.readouterr()
+    cli("purge", expect=2)
+    cli("purge", "--yes")
+    capsys.readouterr()
+    cli("status", "--json")
+    assert json.loads(capsys.readouterr().out)["events"] == 0
+
+
+def test_bench_reports_the_budgets(cli, capsys):
+    cli("bench", "--events", "300", "--gate")
+    report = json.loads(capsys.readouterr().out)
+    assert report["events"] == 300
+    assert report["within_budget"] is True
+    assert report["us_per_event"] > 0
+
+
+def test_sensor_once(cli, capsys):
+    cli("sensor", "--once", "--interval", "1")
+    out = capsys.readouterr().out.strip().splitlines()
+    assert out
+    from damavik.schema import validate_event
+
+    for line in out:
+        assert validate_event(json.loads(line)) == []
+
+
+def test_sensor_can_write_to_a_file(cli, capsys, tmp_path):
+    target = tmp_path / "sensor.jsonl"
+    cli("sensor", "--once", "--out", str(target))
+    assert target.read_text(encoding="utf-8").strip()
+
+
+def test_bad_config_is_reported(tmp_path, rules_dir, capsys):
+    config = tmp_path / "damavik.yaml"
+    config.write_text("nonsense_key: 1\n", encoding="utf-8")
+    code = main(["--config", str(config), "status"])
+    assert code == 2
+    assert "config error" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Path resolution. The documented invocation is `cd brain && python3 -m
+# damavik.cli …`, and an installed copy has neither rules/ nor tests/ next to
+# the working directory. Defaults must resolve from the checkout, not the CWD.
+# ---------------------------------------------------------------------------
+
+
+def test_defaults_resolve_from_the_checkout_not_the_cwd(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    code = main(["--state-dir", str(tmp_path / "state"), "--offline", "selftest", "--json"])
+    assert code == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["ok"] is True, report["failures"]
+    assert report["rules"] >= 15
+    assert report["stats"]["alerts"] > 0
+
+
+def test_bench_works_from_any_directory(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    code = main([
+        "--state-dir", str(tmp_path / "state"), "--offline",
+        "bench", "--events", "120",
+    ])
+    assert code == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["events"] == 120
+
+
+def test_find_data_prefers_the_env_override(monkeypatch, tmp_path):
+    from damavik.cli import find_data
+
+    target = tmp_path / "custom-rules"
+    target.mkdir()
+    monkeypatch.setenv("DAMAVIK_RULES_DIR", str(target))
+    assert find_data("rules") == str(target)
+
+
+def test_find_data_returns_a_sensible_path_when_nothing_exists(monkeypatch, tmp_path):
+    from damavik.cli import find_data
+
+    monkeypatch.delenv("DAMAVIK_RULES_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
+    assert find_data("definitely-not-here") == str(tmp_path / "definitely-not-here")
+
+
+def test_colour_is_off_when_piped(monkeypatch):
+    """Output is piped into grep more often than it is read."""
+    import io
+
+    from damavik.cli import use_color
+
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    assert use_color(io.StringIO()) is False
+
+
+def test_force_and_no_colour_env(monkeypatch):
+    import io
+
+    from damavik.cli import use_color
+
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    assert use_color(io.StringIO()) is True
+    # an explicit opt-out wins over a forced opt-in
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert use_color(io.StringIO()) is False

@@ -1,0 +1,55 @@
+{
+  "affected": [
+    {
+      "database_specific": {
+        "severity": "MEDIUM"
+      },
+      "package": {
+        "ecosystem": "crates.io",
+        "name": "examplecrate",
+        "purl": "pkg:cargo/examplecrate"
+      },
+      "ranges": [
+        {
+          "events": [
+            {
+              "introduced": "0.9.0"
+            },
+            {
+              "fixed": "0.9.3"
+            }
+          ],
+          "type": "SEMVER"
+        }
+      ]
+    },
+    {
+      "database_specific": {
+        "severity": "HIGH"
+      },
+      "package": {
+        "ecosystem": "crates.io",
+        "name": "gitonly",
+        "purl": "pkg:cargo/gitonly"
+      },
+      "ranges": [
+        {
+          "events": [
+            {
+              "introduced": "0000000000000000000000000000000000000000"
+            },
+            {
+              "fixed": "1111111111111111111111111111111111111111"
+            }
+          ],
+          "repo": "https://example.invalid/gitonly.git",
+          "type": "GIT"
+        }
+      ]
+    }
+  ],
+  "details": "examplecrate before 0.9.3 has an unsound transmute.",
+  "id": "RUSTSEC-2023-0007",
+  "modified": "2026-03-05T08:30:00Z",
+  "summary": "examplecrate unsound transmute"
+}

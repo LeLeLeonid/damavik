@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: New listening port
+id: DMK-R-002
+status: test
+level: medium
+description: >-
+  A socket started listening that was not listening at the last differential -
+  a backdoor listener or an unexpected service.
+tags:
+  - attack.persistence
+  - attack.t1571
+logsource:
+  category: any
+selection:
+  type: sys.event
+  meta.kind: listen
+  meta.action: new
+condition: selection

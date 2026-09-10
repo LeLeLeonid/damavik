@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Damavik brain: reads the sensor's JSONL stream from stdin, scores it, writes
+# the journal, the SQLite index and alerts.log, and serves the dashboard on
+# 127.0.0.1.
+#
+# The brain is separated from the sensor on purpose: either side can be
+# restarted, upgraded or crash without taking the other down, and the sensor
+# can be replaced (sensor-py -> eBPF) without touching this unit.
+
+[Unit]
+Description=Damavik brain - local host threat monitor
+After=network.target
+# Not Requires=: the brain must still run and keep its data if the sensor is
+# stopped for maintenance.
+
+[Service]
+Type=simple
+# DAMAVIK_SENSOR_CMD is the sensor command; see the matching damavik-sensor
+# service for the packaged alternative (a pipe between two units).
+Environment=DAMAVIK_STATE_DIR=/var/lib/damavik
+Environment=DAMAVIK_RULES_DIR=/usr/share/damavik/rules
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/local/bin/damavik run --config /etc/damavik/damavik.yaml
+StandardInput=null
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+
+# --- hardening -------------------------------------------------------------
+# A monitor that can be trivially tampered with is worse than none, so the
+# brain gets the tightest profile that still lets it read the sensor stream and
+# write its own state.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+
+# Only its own state directory is writable.
+ReadWritePaths=/var/lib/damavik
+
+# Resource caps: brain RSS budget is 150 MB. A runaway brain is killed here
+# rather than dragging the machine down with it.
+MemoryMax=256M
+TasksMax=64
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target

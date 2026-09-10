@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Large upload in a single flow
+id: DMK-N-004
+status: test
+level: medium
+description: >-
+  More than 5 MiB pushed out in one connection - archiving and exfiltration
+  both look like this.
+tags:
+  - attack.exfiltration
+  - attack.t1041
+logsource:
+  category: network_connect
+selection:
+  net.bytes_out|gte: 5242880
+condition: selection

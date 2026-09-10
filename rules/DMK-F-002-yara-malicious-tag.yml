@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: YARA matched a malicious family
+id: DMK-F-002
+status: stable
+level: critical
+description: >-
+  A curated YARA rule tagged the executed file as a known malicious family.
+  This is the highest-confidence signal Damavik produces locally.
+tags:
+  - attack.execution
+logsource:
+  category: file_event
+selection:
+  yara|contains:
+    - malware
+    - trojan
+    - stealer
+    - ransomware
+    - backdoor
+condition: selection

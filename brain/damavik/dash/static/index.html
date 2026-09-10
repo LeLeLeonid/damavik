@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<!--
+SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+SPDX-License-Identifier: GPL-3.0-only
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>damavik — local threat monitor</title>
+<link rel="stylesheet" href="/dash.css">
+</head>
+<body>
+<header>
+  <h1>damavik</h1>
+  <nav>
+    <button data-view="tree" class="active">process tree</button>
+    <button data-view="graph">flow graph</button>
+    <button data-view="timeline">timeline</button>
+    <button data-view="packages">packages</button>
+    <button data-view="alerts">alert inbox</button>
+  </nav>
+  <div id="summary" class="summary">loading…</div>
+</header>
+
+<main>
+  <section id="view-tree" class="view active">
+    <div class="pane">
+      <h2>processes <small>pid · name · user · score</small></h2>
+      <div id="tree" class="tree"></div>
+    </div>
+    <div class="pane detail" id="tree-detail">
+      <h2>detail</h2>
+      <p class="hint">click a process to see its command line, hash, tags and connections.</p>
+    </div>
+  </section>
+
+  <section id="view-graph" class="view">
+    <div class="pane">
+      <h2>flow graph <small>drag nodes · scroll to zoom</small></h2>
+      <div class="controls">
+        <label>min score <input id="graph-min" type="range" min="0" max="100" value="0"></label>
+        <label>port <input id="graph-port" type="text" placeholder="any" size="6"></label>
+      </div>
+      <canvas id="graph" width="900" height="560"></canvas>
+    </div>
+  </section>
+
+  <section id="view-timeline" class="view">
+    <div class="pane">
+      <h2>timeline <small>last <span id="tl-hours">24</span> hours, 15-minute lanes</small></h2>
+      <canvas id="timeline" width="1200" height="260"></canvas>
+      <div id="timeline-legend" class="legend"></div>
+    </div>
+  </section>
+
+  <section id="view-packages" class="view">
+    <div class="pane">
+      <h2>packages <small id="pkg-count"></small></h2>
+      <div id="packages"></div>
+    </div>
+  </section>
+
+  <section id="view-alerts" class="view">
+    <div class="pane">
+      <h2>alert inbox <small>ranked, with the subgraph that caused each one</small></h2>
+      <div id="alerts"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span id="offline-flag"></span>
+  <span>everything you see is stored on this machine. nothing is uploaded.</span>
+</footer>
+<script src="/dash.js"></script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# damavik.yaml - copy to ~/.config/damavik/damavik.yaml or /etc/damavik/
+#
+# Every key below is the default.  An unknown key is a hard error, so a typo
+# can never silently disable a control.
+
+host_id: auto            # "auto" uses the hostname; set a stable id for fleets
+offline: false           # true = kill every intel plugin, forever, for this run
+retention_days: 7        # events older than this are deleted on every finish()
+state_dir: ~/.local/state/damavik
+
+sensor:
+  flows: true
+  dns: true              # requires the eBPF sensor; sensor-py cannot see DNS
+  exec_hash: true        # SHA-256 every executed binary (skipped above 64 MiB)
+  yara: true             # scan at exec time, inside the P1 budget
+  poll_interval_s: 2.0   # sensor-py only; eBPF is event-driven
+
+osquery:
+  enabled: false         # optional sidecar; see osquery/packs/damavik.conf
+  interval_s: 60
+  pack: osquery/packs/damavik.conf
+
+# Every provider below is opt-in.  Nothing here talks to the network unless you
+# flip `enabled` yourself, and `offline: true` overrides all of them.
+intel:
+  osv_mirror:
+    enabled: true        # keyless, local files only - no network after sync
+    sync: weekly
+    dir: ~/.local/share/damavik/osv
+  bazaar:
+    enabled: false       # keyless: sends SHA-256 hashes, never file contents
+  urlhaus:
+    enabled: false       # keyless: sends domains/URLs
+  abuseipdb:
+    enabled: false       # needs a key
+    key_env: ABUSEIPDB_KEY
+  otx:
+    enabled: false
+    key_env: OTX_KEY
+  vt:
+    enabled: false       # last resort: tight free-tier quota, cached hard
+    key_env: VT_KEY
+
+dashboard:
+  enabled: true
+  bind: 127.0.0.1        # the only accepted value - the MVP has no LAN mode
+  port: 8787
+  token_env: DAMAVIK_TOKEN
+
+alerts:
+  path: alerts.log       # relative paths live under state_dir
+  notify: true           # notify-send on Linux; never blocks, never raises
+  webhook: null          # optional; if set, it is the only outbound HTTP
+  cooldown_s: 300        # one alert per (rule, indicator) per cooldown window
+  min_score: 45.0        # below this, rule hits still log but do not alert
+
+limits:
+  max_event_bytes: 65536      # larger sensor lines are dropped and counted
+  max_response_bytes: 1048576 # hard cap on any intel response body
+
+scoring:
+  allowlist_exes:
+    - /usr/bin/systemd
+    - /usr/lib/systemd/systemd
+    - /sbin/init
+  allowlist_hashes: []
+  common_ports: [22, 53, 80, 443, 465, 587, 993, 995, 5353]
+
+rules:
+  dir: rules

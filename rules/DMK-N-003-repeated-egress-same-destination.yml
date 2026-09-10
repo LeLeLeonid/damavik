@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Repeated egress to one destination (beacon proxy)
+id: DMK-N-003
+status: test
+level: medium
+description: >-
+  Six or more connections to the same destination inside two minutes.  This is
+  a cheap periodicity proxy; true interval-variance beacon scoring arrives in
+  P3 with the flow-graph work.
+tags:
+  - attack.command_and_control
+  - attack.t1071
+logsource:
+  category: network_connect
+selection:
+  net.dst|exists: true
+condition: selection
+correlate:
+  group_by: net.dst
+  window_s: 120
+  min_count: 6

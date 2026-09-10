@@ -216,3 +216,24 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# NOTE: `dist/` and `build/` are ignored above by the GitHub Python template,
+# which is why shipped packaging files live in `packaging/` rather than the
+# plan's original `dist/` directory.
+
+# --- Damavik runtime state -------------------------------------------------
+# Never commit a capture, a journal or a local database: they contain command
+# lines, hostnames and usernames from a real machine.
+*.jsonl.log
+alerts.log
+journal.jsonl
+state/
+.damavik/
+# NOT `osv/`: that pattern silently swallowed tests/fixtures/osv/, which is a
+# committed test fixture. The runtime OSV mirror lives outside the repository
+# (~/.local/share/damavik/osv), so no ignore rule is needed for it here.
+
+# --- Damavik dev environment ----------------------------------------------
+.pylibs/
+.pytest_cache/
+.ruff_cache/

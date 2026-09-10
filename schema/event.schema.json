@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LeLeLeonid/damavik/schema/event.schema.json",
+  "title": "Damavik canonical event",
+  "description": "The frozen event schema. Every sensor, rule, store query, API response and UI view speaks only this. Unknown fields are permitted for forward compatibility but are ignored by scoring; unknown `type` values are stored as `sensor.meta` with `meta.original_type` preserved. The authoritative validator is `brain/damavik/schema.py::validate_event` — this document mirrors it and `tests/test_schema.py` fails if the two drift.",
+  "type": "object",
+  "required": ["ts", "type"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Version of this schema. Present on every record Damavik writes."
+    },
+    "ts": {
+      "type": "string",
+      "description": "RFC 3339 UTC with millisecond precision. Sensors may send epoch seconds/ms; the brain coerces.",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$"
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Machine identifier. Defaults to the hostname; overridable via `host_id` in config."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "proc.exec",
+        "net.flow",
+        "dns.query",
+        "file.verdict",
+        "pkg.event",
+        "sys.event",
+        "alert",
+        "sensor.meta"
+      ]
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonic per-sensor sequence number. Survives sensor restarts within a boot."
+    },
+    "boot_id": {
+      "type": "string",
+      "description": "Boot identifier from the OS. Lets the brain detect that `seq` restarted."
+    },
+    "sensor_id": {
+      "type": "string",
+      "description": "Which sensor emitted this event, e.g. `linux-ebpf`, `py-proc`, `osquery`."
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Filled by the brain's scorer, never by a sensor."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Detection tags, e.g. `risk_tool`, `malware`, `intel_suspicious`."
+    },
+    "rule": {
+      "type": ["string", "null"],
+      "description": "Id of the rule that fired, if any."
+    },
+    "proc": {
+      "type": "object",
+      "description": "Process context. Present on `proc.exec` and attached to related events.",
+      "properties": {
+        "pid": { "type": "integer", "minimum": 0 },
+        "ppid": { "type": "integer", "minimum": 0 },
+        "exe": { "type": "string", "description": "Absolute path to the executable image." },
+        "cmd": { "type": "string", "description": "Full command line." },
+        "cwd": { "type": "string" },
+        "user": { "type": "string" },
+        "uid": { "type": "integer" },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Lowercase hex. A file too large to hash is omitted rather than partially hashed."
+        },
+        "signed": { "type": "boolean" },
+        "start_ms": { "type": "integer", "description": "Epoch ms of process start, when the sensor knows it." }
+      },
+      "additionalProperties": true
+    },
+    "net": {
+      "type": "object",
+      "description": "Connection context. Present on `net.flow`.",
+      "properties": {
+        "proto": { "type": "string", "enum": ["tcp", "udp", "icmp"] },
+        "src": { "type": "string", "description": "Source IP literal (v4 or v6, including IPv4-mapped)." },
+        "sport": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "dst": { "type": "string", "description": "Destination IP literal." },
+        "dport": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "bytes_in": { "type": "integer", "minimum": 0 },
+        "bytes_out": { "type": "integer", "minimum": 0 },
+        "dur_ms": { "type": "integer", "minimum": 0 },
+        "ja4": { "type": ["string", "null"], "description": "Optional TLS fingerprint, P3." }
+      },
+      "additionalProperties": true
+    },
+    "dns": {
+      "type": "object",
+      "description": "Lookup context. Present on `dns.query`.",
+      "required": ["q"],
+      "properties": {
+        "q": { "type": "string", "minLength": 1, "description": "Query name." },
+        "rtype": { "type": "string", "description": "Record type, e.g. A, AAAA, TXT, CNAME." },
+        "answers": { "type": "array", "items": { "type": "string" } },
+        "root": { "type": "string", "description": "Registrable domain, computed by the brain." }
+      },
+      "additionalProperties": true
+    },
+    "file": {
+      "type": "object",
+      "description": "File context. Present on `file.verdict`.",
+      "properties": {
+        "path": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "size": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "pkg": {
+      "type": "object",
+      "description": "Package context. Present on `pkg.event`.",
+      "required": ["name"],
+      "properties": {
+        "manager": {
+          "type": "string",
+          "enum": ["deb", "rpm", "msi", "pip", "cargo", "npm", "apk", "other"]
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string" },
+        "arch": { "type": "string" },
+        "status": { "type": "string", "description": "installed | upgraded | removed" },
+        "cves": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Advisory ids matched against the local OSV mirror."
+        }
+      },
+      "additionalProperties": true
+    },
+    "yara": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Matched YARA rule names, emitted by the sensor."
+    },
+    "meta": {
+      "type": "object",
+      "description": "Derived and auxiliary fields. The enricher writes here; rules read from here. Also holds `original_type` for events whose type the brain did not recognise, `kind`/`action` for `sys.event`, and drop counters for `sensor.meta`.",
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "dns.query" } } },
+      "then": { "required": ["dns"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "net.flow" } } },
+      "then": { "required": ["net"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "pkg.event" } } },
+      "then": { "required": ["pkg"] }
+    }
+  ]
+}

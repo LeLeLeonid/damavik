@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Office application spawns a shell
+id: DMK-P-001
+status: stable
+level: high
+description: >-
+  A document reader or browser launching an interactive shell is the classic
+  first stage of a macro or drive-by dropper.
+references:
+  - https://attack.mitre.org/techniques/T1566/
+tags:
+  - attack.execution
+  - attack.t1059
+logsource:
+  category: process_creation
+selection:
+  meta.parent_is_sensitive: true
+  meta.child_is_shell: true
+condition: selection

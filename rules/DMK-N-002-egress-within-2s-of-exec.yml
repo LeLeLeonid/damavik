@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Network egress within two seconds of execution
+id: DMK-N-002
+status: test
+level: high
+description: >-
+  A freshly executed, previously unseen binary that immediately opens an
+  outbound connection is a dropper phoning home.  The process age comes from
+  the brain's context enricher, so this works on every platform.
+tags:
+  - attack.command_and_control
+logsource:
+  category: network_connect
+selection:
+  meta.age_ms|lte: 2000
+filter:
+  proc.exe|startswith:
+    - /usr/lib/systemd/
+    - /usr/bin/systemd
+condition: selection and not filter

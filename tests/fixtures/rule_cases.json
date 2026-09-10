@@ -1,0 +1,1268 @@
+{
+  "DMK-D-001": {
+    "fp": [
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb00.example.com",
+          "root": "example.com",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 24
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      },
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb01.example.com",
+          "root": "example.com",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 24
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      },
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb02.example.com",
+          "root": "example.com",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 24
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      },
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb03.example.com",
+          "root": "example.com",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 24
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      }
+    ],
+    "tp": [
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb00.exfil-tunnel.example",
+          "root": "exfil-tunnel.example",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 33
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      },
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb01.exfil-tunnel.example",
+          "root": "exfil-tunnel.example",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 33
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      },
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb02.exfil-tunnel.example",
+          "root": "exfil-tunnel.example",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 33
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      },
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb03.exfil-tunnel.example",
+          "root": "exfil-tunnel.example",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 33
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      },
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb04.exfil-tunnel.example",
+          "root": "exfil-tunnel.example",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 33
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      },
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb05.exfil-tunnel.example",
+          "root": "exfil-tunnel.example",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 33
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      },
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb06.exfil-tunnel.example",
+          "root": "exfil-tunnel.example",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 33
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      },
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb07.exfil-tunnel.example",
+          "root": "exfil-tunnel.example",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 33
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      },
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb08.exfil-tunnel.example",
+          "root": "exfil-tunnel.example",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 33
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      },
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb09.exfil-tunnel.example",
+          "root": "exfil-tunnel.example",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 33
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      }
+    ]
+  },
+  "DMK-D-002": {
+    "fp": [
+      {
+        "dns": {
+          "answers": [],
+          "q": "mail.corp.example",
+          "root": "corp.example",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.62,
+          "dns_label_len": 4,
+          "dns_qname_len": 17
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      }
+    ],
+    "tp": [
+      {
+        "dns": {
+          "answers": [],
+          "q": "k7q2x9mzvb41.exfil-tunnel.example",
+          "root": "exfil-tunnel.example",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 12,
+          "dns_qname_len": 33
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      }
+    ]
+  },
+  "DMK-D-003": {
+    "fp": [
+      {
+        "dns": {
+          "answers": [],
+          "q": "t.example",
+          "root": "t.example",
+          "rtype": "A"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 1,
+          "dns_qname_len": 9
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      }
+    ],
+    "tp": [
+      {
+        "dns": {
+          "answers": [],
+          "q": "t.example",
+          "root": "t.example",
+          "rtype": "TXT"
+        },
+        "host": "t",
+        "meta": {
+          "dns_entropy": 3.6,
+          "dns_entropy_ratio": 0.99,
+          "dns_label_len": 1,
+          "dns_qname_len": 9
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "dns.query"
+      }
+    ]
+  },
+  "DMK-F-001": {
+    "fp": [
+      {
+        "host": "t",
+        "proc": {
+          "cmd": "/dev/shm/x",
+          "exe": "/dev/shm/x",
+          "pid": 3001,
+          "ppid": 1,
+          "signed": true,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "proc": {
+          "cmd": "/dev/shm/x",
+          "exe": "/dev/shm/x",
+          "pid": 3000,
+          "ppid": 1,
+          "signed": false,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ]
+  },
+  "DMK-F-002": {
+    "fp": [
+      {
+        "host": "t",
+        "proc": {
+          "exe": "/usr/bin/x",
+          "pid": 9
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "file.verdict",
+        "yara": [
+          "packer"
+        ]
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "proc": {
+          "exe": "/tmp/x",
+          "pid": 9
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "file.verdict",
+        "yara": [
+          "malware"
+        ]
+      }
+    ]
+  },
+  "DMK-F-003": {
+    "fp": [
+      {
+        "host": "t",
+        "proc": {
+          "exe": "/usr/bin/x",
+          "pid": 9
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "file.verdict",
+        "yara": [
+          "packer"
+        ]
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "proc": {
+          "exe": "/usr/bin/nmap",
+          "pid": 9
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "file.verdict",
+        "yara": [
+          "risk_tool"
+        ]
+      }
+    ]
+  },
+  "DMK-N-001": {
+    "fp": [
+      {
+        "host": "t",
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "1.2.3.4",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 4444,
+          "dst": "1.2.3.4",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      }
+    ]
+  },
+  "DMK-N-002": {
+    "fp": [
+      {
+        "host": "t",
+        "meta": {
+          "age_ms": 60000
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "1.2.3.4",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "meta": {
+          "age_ms": 800
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "1.2.3.4",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      }
+    ]
+  },
+  "DMK-N-003": {
+    "fp": [
+      {
+        "host": "t",
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "8.8.8.8",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "8.8.8.8",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "8.8.8.8",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "9.9.9.9",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "9.9.9.9",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "9.9.9.9",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "9.9.9.9",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "9.9.9.9",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "9.9.9.9",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      }
+    ]
+  },
+  "DMK-N-004": {
+    "fp": [
+      {
+        "host": "t",
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 4000,
+          "dport": 443,
+          "dst": "1.2.3.4",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 6000000,
+          "dport": 443,
+          "dst": "1.2.3.4",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/tmp/.x/payload",
+          "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      }
+    ]
+  },
+  "DMK-P-001": {
+    "fp": [
+      {
+        "host": "t",
+        "meta": {
+          "child_is_shell": true,
+          "parent_is_sensitive": false
+        },
+        "proc": {
+          "cmd": "/bin/bash",
+          "exe": "/bin/bash",
+          "pid": 2001,
+          "ppid": 1,
+          "signed": true,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "meta": {
+          "child_is_shell": true,
+          "parent_is_sensitive": true
+        },
+        "proc": {
+          "cmd": "/bin/bash -c id",
+          "exe": "/bin/bash",
+          "pid": 2000,
+          "ppid": 1000,
+          "signed": true,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ]
+  },
+  "DMK-P-002": {
+    "fp": [
+      {
+        "host": "t",
+        "meta": {
+          "child_is_downloader": true,
+          "parent_is_shell": false
+        },
+        "proc": {
+          "cmd": "wget http://x/y",
+          "exe": "/usr/bin/wget",
+          "pid": 2003,
+          "ppid": 1,
+          "signed": true,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "meta": {
+          "child_is_downloader": true,
+          "parent_is_shell": true
+        },
+        "proc": {
+          "cmd": "wget http://x/y",
+          "exe": "/usr/bin/wget",
+          "pid": 2002,
+          "ppid": 2000,
+          "signed": true,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ]
+  },
+  "DMK-P-003": {
+    "fp": [
+      {
+        "host": "t",
+        "meta": {
+          "child_is_interpreter": true,
+          "parent_is_sensitive": false
+        },
+        "proc": {
+          "cmd": "python3 m.py",
+          "exe": "/usr/bin/python3",
+          "pid": 4001,
+          "ppid": 1,
+          "signed": true,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "meta": {
+          "child_is_interpreter": true,
+          "parent_is_sensitive": true
+        },
+        "proc": {
+          "cmd": "python3 m.py",
+          "exe": "/usr/bin/python3",
+          "pid": 4000,
+          "ppid": 1000,
+          "signed": true,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ]
+  },
+  "DMK-P-004": {
+    "fp": [
+      {
+        "host": "t",
+        "meta": {
+          "cmd_is_encoded": false
+        },
+        "proc": {
+          "cmd": "powershell.exe Get-Process",
+          "exe": "C:\\Windows\\powershell.exe",
+          "pid": 5001,
+          "ppid": 1,
+          "signed": true,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "meta": {
+          "cmd_is_encoded": true
+        },
+        "proc": {
+          "cmd": "powershell.exe -enc SQBFAFgA",
+          "exe": "C:\\Windows\\powershell.exe",
+          "pid": 5000,
+          "ppid": 1,
+          "signed": true,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ]
+  },
+  "DMK-P-005": {
+    "fp": [
+      {
+        "host": "t",
+        "proc": {
+          "cmd": "/usr/bin/less",
+          "exe": "/usr/bin/less",
+          "pid": 3001,
+          "ppid": 1,
+          "signed": true,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "proc": {
+          "cmd": "/tmp/.x/payload",
+          "exe": "/tmp/.x/payload",
+          "pid": 3000,
+          "ppid": 1,
+          "signed": true,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ]
+  },
+  "DMK-R-001": {
+    "fp": [
+      {
+        "host": "t",
+        "meta": {
+          "action": "seen",
+          "kind": "autorun",
+          "path": "/etc/xdg/autostart/x.desktop"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "sys.event"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "meta": {
+          "action": "new",
+          "kind": "autorun",
+          "path": "/etc/xdg/autostart/x.desktop"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "sys.event"
+      }
+    ]
+  },
+  "DMK-R-002": {
+    "fp": [
+      {
+        "host": "t",
+        "meta": {
+          "action": "seen",
+          "kind": "listen",
+          "port": 22
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "sys.event"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "meta": {
+          "action": "new",
+          "kind": "listen",
+          "port": 31337
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "sys.event"
+      }
+    ]
+  },
+  "DMK-S-001": {
+    "fp": [
+      {
+        "host": "t",
+        "meta": {
+          "hash_changed": false
+        },
+        "proc": {
+          "cmd": "/usr/bin/curl",
+          "exe": "/usr/bin/curl",
+          "pid": 6000,
+          "ppid": 1,
+          "sha256": "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4000000000000000000000000000000",
+          "signed": true,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "meta": {
+          "hash_changed": true
+        },
+        "proc": {
+          "cmd": "/usr/bin/curl",
+          "exe": "/usr/bin/curl",
+          "pid": 6001,
+          "ppid": 1,
+          "sha256": "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5000000000000000000000000000000",
+          "signed": true,
+          "user": "alice"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec"
+      }
+    ]
+  },
+  "DMK-V-001": {
+    "fp": [
+      {
+        "host": "t",
+        "meta": {
+          "action": "cve",
+          "net_capable": false
+        },
+        "pkg": {
+          "cves": [],
+          "manager": "deb",
+          "name": "libbar",
+          "severity": "high",
+          "version": "2.0"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "pkg.event"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "meta": {
+          "action": "cve",
+          "net_capable": false
+        },
+        "pkg": {
+          "cves": [
+            "CVE-2024-0001"
+          ],
+          "manager": "deb",
+          "name": "libfoo",
+          "severity": "high",
+          "version": "1.2.3"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "pkg.event"
+      }
+    ]
+  },
+  "DMK-V-002": {
+    "fp": [
+      {
+        "host": "t",
+        "meta": {
+          "action": "install",
+          "net_capable": false
+        },
+        "pkg": {
+          "cves": [],
+          "manager": "deb",
+          "name": "libpng16-16",
+          "severity": "high",
+          "version": "1.6.40"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "pkg.event"
+      }
+    ],
+    "tp": [
+      {
+        "host": "t",
+        "meta": {
+          "action": "install",
+          "net_capable": true
+        },
+        "pkg": {
+          "cves": [],
+          "manager": "deb",
+          "name": "netcat-openbsd",
+          "severity": "high",
+          "version": "1.226"
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "pkg.event"
+      }
+    ]
+  }
+}

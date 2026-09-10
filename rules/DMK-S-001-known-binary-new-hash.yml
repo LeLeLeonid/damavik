@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Known binary path with a new hash
+id: DMK-S-001
+status: test
+level: high
+description: >-
+  A path this host has run before is now a different file.  That is a
+  supply-chain swap, a replaced system binary, or an installer that did
+  something it should not have.
+tags:
+  - attack.persistence
+  - attack.t1554
+logsource:
+  category: process_creation
+selection:
+  meta.hash_changed: true
+condition: selection

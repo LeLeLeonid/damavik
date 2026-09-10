@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LeLeLeonid/damavik/schema/alert.schema.json",
+  "title": "Damavik alert",
+  "description": "An alert is the brain's only output of judgement, and it is never a black box: `explain` must be non-empty and must contain the human-readable reasons behind the score. The authoritative validator is `brain/damavik/schema.py::validate_alert`; `tests/test_schema.py` fails if this document drifts from it.",
+  "type": "object",
+  "required": ["id", "ts", "title", "level", "score"],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^a-[0-9a-f]{8,}$",
+      "description": "Stable alert id, prefixed `a-`."
+    },
+    "ts": {
+      "type": "string",
+      "description": "RFC 3339 UTC, millisecond precision.",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$"
+    },
+    "title": { "type": "string", "minLength": 1 },
+    "level": { "type": "string", "enum": ["info", "low", "medium", "high", "critical"] },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "The maximum score of the contributing events."
+    },
+    "rule": {
+      "type": ["string", "null"],
+      "description": "Rule id that produced this alert, e.g. `DMK-N-002`. Null for score-only alerts."
+    },
+    "events": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^e-[0-9a-f]{8,}$" },
+      "description": "Event ids behind this alert, in causal order. This is what makes the dashboard subgraph possible."
+    },
+    "iocs": {
+      "type": "object",
+      "description": "Extracted indicators: sha256, dst, q, path, pkg, pid. Never empty — `damavik selftest` fails on an alert with no indicators.",
+      "additionalProperties": true
+    },
+    "explain": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Every scoring reason and rule match, joined. Mandatory: an unexplainable alert is a bug, not a feature."
+    },
+    "dedup": {
+      "type": "string",
+      "description": "Suppression key: rule id + correlation group (or the primary indicator). Repeats within `alerts.cooldown_s` update this alert instead of creating a new one."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["open", "acked", "closed"],
+      "default": "open"
+    },
+    "host": { "type": "string" },
+    "verdict": {
+      "type": "string",
+      "enum": ["unknown", "clean", "suspicious", "malicious"],
+      "description": "Aggregate verdict, informed by optional intel plugins. A signal, never a conclusion."
+    }
+  }
+}

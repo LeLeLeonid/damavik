@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: DNS query burst on one domain
+id: DMK-D-001
+status: test
+level: medium
+description: >-
+  Ten or more lookups under one registrable domain in a minute.  Combined with
+  DMK-D-002 this is the DNS exfiltration signature.
+tags:
+  - attack.exfiltration
+  - attack.t1071.004
+logsource:
+  category: dns_query
+selection:
+  dns.root|exists: true
+condition: selection
+correlate:
+  group_by: dns.root
+  window_s: 60
+  min_count: 10

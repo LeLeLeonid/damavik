@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Installed package has a known vulnerability
+id: DMK-V-001
+status: stable
+level: high
+description: >-
+  pkgwatch matched the installed version against the local OSV mirror.  The
+  CVE ids are attached to the event and shown in the alert.
+tags:
+  - vulnerability
+logsource:
+  category: package
+selection:
+  pkg.cves|exists: true
+condition: selection

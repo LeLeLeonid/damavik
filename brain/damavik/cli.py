@@ -1,0 +1,690 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+"""``damavik`` command line interface.
+
+Everything the dashboard shows is reachable here, because a box under attack
+is often a box you are on over SSH.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+from typing import Any
+
+from . import SCHEMA_VERSION, __version__
+from .config import Config, ConfigError, load as load_config
+from .journal import Journal, verify as verify_journal
+from .osv import OsvMirror
+from .pipeline import Pipeline
+from .pkgwatch import PkgWatch, read_dpkg_status
+from .rules import load_rules_dir
+from .schema import validate_event
+from .sensorpy import ProcSensor, tail_dns_log
+from .store import Store
+
+LEVEL_COLOR = {"critical": "\033[31m", "high": "\033[91m", "medium": "\033[33m",
+               "low": "\033[36m", "info": "\033[37m"}
+RESET = "\033[0m"
+
+
+def use_color(stream: Any = None) -> bool:
+    """Colour only for a real terminal, and never when ``NO_COLOR`` is set.
+
+    A monitor's output gets piped into grep and log shippers more often than it
+    gets read, so escape codes must be opt-out-by-default, not opt-in.
+    """
+    if os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("FORCE_COLOR"):
+        return True
+    stream = stream if stream is not None else sys.stdout
+    return bool(getattr(stream, "isatty", lambda: False)())
+
+
+def _level_color(level: str, use: bool) -> tuple[str, str]:
+    """ANSI prefix/suffix pair for a level; both empty when colour is off."""
+    if not use:
+        return "", ""
+    return LEVEL_COLOR.get(level, ""), RESET
+
+
+def _emit(obj: Any, as_json: bool, human: str) -> None:
+    if as_json:
+        print(json.dumps(obj, sort_keys=True, default=str))
+    else:
+        print(human)
+
+
+def repo_root() -> str:
+    """The checkout root, derived from the package location.
+
+    Defaults for ``rules/`` and the demo fixture must not depend on the current
+    working directory: the documented way to run the brain is ``cd brain &&
+    python3 -m damavik.cli …``, and an installed copy has neither ``rules/`` nor
+    ``tests/`` next to the CWD.
+    """
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def find_data(name: str, override: str | None = None) -> str:
+    """Resolve a shipped data path (``rules``, a fixture) to something real.
+
+    Search order: explicit override, ``$DAMAVIK_<NAME>_DIR``, the current
+    directory, the checkout, then ``/usr/share/damavik`` (where
+    ``packaging/install.sh`` puts things).  The CWD candidate is returned when
+    nothing exists, so error messages point somewhere sensible.
+    """
+    if override:
+        return os.path.expanduser(override)
+    env_key = "DAMAVIK_" + os.path.basename(name).upper().replace("-", "_") + "_DIR"
+    env = os.environ.get(env_key)
+    if env:
+        return os.path.expanduser(env)
+    cwd_candidate = os.path.join(os.getcwd(), name)
+    for candidate in (
+        cwd_candidate,
+        os.path.join(repo_root(), name),
+        os.path.join("/usr/share/damavik", name),
+    ):
+        if os.path.exists(candidate):
+            return candidate
+    return cwd_candidate
+
+
+DEFAULT_RULES = "rules"
+DEFAULT_FIXTURE = os.path.join("tests", "fixtures", "attack-chain.jsonl")
+
+
+def _config(args: argparse.Namespace) -> Config:
+    cfg = load_config(getattr(args, "config", None))
+    if getattr(args, "offline", False):
+        cfg.offline = True
+    if getattr(args, "state_dir", None):
+        cfg.state_dir = args.state_dir
+    if getattr(args, "rules_dir", None):
+        cfg.rules["dir"] = args.rules_dir
+    elif cfg.rules.get("dir") in (None, "", "rules"):
+        cfg.rules["dir"] = find_data(DEFAULT_RULES)
+    return cfg
+
+
+def _score_bar(score: float, width: int = 10) -> str:
+    filled = int(round(score / 100.0 * width))
+    return "#" * filled + "." * (width - filled)
+
+
+# ---------------------------------------------------------------- subcommands
+def cmd_run(args: argparse.Namespace) -> int:
+    cfg = _config(args)
+    with Pipeline(cfg) as pipeline:
+        if args.file:
+            pipeline.run_file(args.file)
+        else:
+            pipeline.run(sys.stdin)
+        stats = pipeline.stats.as_dict()
+        stats["ingest"] = pipeline.ingest_stats.as_dict()
+        stats["rules_loaded"] = len(pipeline.rules)
+        _emit(stats, args.json,
+              f"events={stats['events']} alerts={stats['alerts']} "
+              f"rules={stats['rules_loaded']} rejected={stats['ingest']['rejected']}")
+    return 0
+
+
+def cmd_sensor(args: argparse.Namespace) -> int:
+    cfg = _config(args)
+    sensor = ProcSensor(
+        host=cfg.resolved_host_id(),
+        exec_hash=bool(cfg.sensor.get("exec_hash", True)),
+        flows=bool(cfg.sensor.get("flows", True)),
+    )
+    out = open(args.out, "a", encoding="utf-8") if args.out else sys.stdout
+    try:
+        if args.dns_tail:
+            import threading
+
+            threading.Thread(
+                target=tail_dns_log, args=(args.dns_tail, sensor, out), daemon=True
+            ).start()
+        sensor.run(interval=args.interval, out=out, once=args.once)
+    finally:
+        if out is not sys.stdout:
+            out.close()
+    return 0
+
+
+def cmd_tail(args: argparse.Namespace) -> int:
+    cfg = _config(args)
+    store = Store(cfg.db_path())
+    last_id = 0
+    try:
+        while True:
+            rows = store.conn.execute(
+                "SELECT * FROM events WHERE id > ? ORDER BY id LIMIT 200", (last_id,)
+            ).fetchall()
+            for row in rows:
+                last_id = row["id"]
+                event = json.loads(row["raw"])
+                score = float(row["score"])
+                if args.alerts_only and score < float(cfg.alerts.get("min_score", 45)):
+                    continue
+                tags = ",".join(json.loads(row["tags"] or "[]"))
+                target = row["exe"] or row["dst"] or row["q"] or ""
+                _emit(
+                    event,
+                    args.json,
+                    f"{row['ts']} {row['type']:13s} [{_score_bar(score)}] {score:5.1f} "
+                    f"{target[:60]:60s} {tags}",
+                )
+            if args.once:
+                break
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        store.close()
+    return 0
+
+
+def cmd_ps_tree(args: argparse.Namespace) -> int:
+    cfg = _config(args)
+    store = Store(cfg.db_path())
+    roots = store.process_tree(args.pid)
+    store.close()
+
+    def render(node: dict[str, Any], prefix: str, is_last: bool, out: list[str]) -> None:
+        connector = "└─ " if is_last else "├─ "
+        name = os.path.basename(node["exe"] or "?") or "?"
+        score = float(node["score"] or 0.0)
+        out.append(
+            f"{prefix}{connector}{node['pid']:>6} {name:<28} "
+            f"{(node['user'] or '-'):<10} [{_score_bar(score, 6)}] {score:5.1f}"
+        )
+        children = sorted(node["children"], key=lambda child: child["pid"])
+        extension = "   " if is_last else "│  "
+        for index, child in enumerate(children):
+            render(child, prefix + extension, index == len(children) - 1, out)
+
+    lines: list[str] = []
+    for index, root in enumerate(sorted(roots, key=lambda n: n["pid"])):
+        render(root, "", index == len(roots) - 1, lines)
+    if args.json:
+        print(json.dumps(roots, sort_keys=True, default=str))
+    else:
+        print("\n".join(lines) if lines else "(no processes recorded yet)")
+    return 0
+
+
+def cmd_flows(args: argparse.Namespace) -> int:
+    cfg = _config(args)
+    store = Store(cfg.db_path())
+    rows = store.flow_aggregates(pid=args.pid, limit=args.limit)
+    store.close()
+    if args.json:
+        print(json.dumps(rows, sort_keys=True, default=str))
+        return 0
+    if not rows:
+        print("(no flows recorded yet)")
+        return 0
+    print(f"{'pid':>6} {'proto':5} {'destination':<40} {'port':>6} {'conns':>6} {'out':>10}")
+    for row in rows:
+        print(
+            f"{str(row['pid'] or '-'):>6} {row['proto'] or '-':5} {row['dst']:<40} "
+            f"{str(row['dport'] or '-'):>6} {row['conns']:>6} {row['bytes_out']:>10}"
+        )
+    return 0
+
+
+def cmd_top_risks(args: argparse.Namespace) -> int:
+    cfg = _config(args)
+    store = Store(cfg.db_path())
+    rows = store.conn.execute(
+        """SELECT eid, ts, type, exe, dst, q, score, tags FROM events
+           ORDER BY score DESC, ts_ms DESC LIMIT ?""",
+        (int(args.limit),),
+    ).fetchall()
+    store.close()
+    if args.json:
+        print(json.dumps([dict(row) for row in rows], sort_keys=True, default=str))
+        return 0
+    if not rows:
+        print("(nothing recorded yet)")
+        return 0
+    for row in rows:
+        target = row["exe"] or row["dst"] or row["q"] or "-"
+        print(
+            f"{row['score']:5.1f} [{_score_bar(float(row['score']), 8)}] {row['ts']} "
+            f"{row['type']:12s} {os.path.basename(str(target))[:44]:44s} "
+            f"{','.join(json.loads(row['tags'] or '[]'))[:40]}"
+        )
+    return 0
+
+
+def cmd_alerts(args: argparse.Namespace) -> int:
+    cfg = _config(args)
+    store = Store(cfg.db_path())
+    alerts = store.alerts(limit=args.limit, status=args.status)
+    store.close()
+    if args.json:
+        print(json.dumps(alerts, sort_keys=True, default=str))
+        return 0
+    if not alerts:
+        print("(no alerts)")
+        return 0
+    colour = use_color()
+    for alert in alerts:
+        color, reset = _level_color(alert["level"], colour)
+        print(
+            f"{color}{alert['level'].upper():8s}{reset} {alert['score']:5.1f} {alert['ts']} "
+            f"{alert['id']}  {alert['title']}"
+        )
+        if args.verbose:
+            print(f"         rule: {alert['rule'] or '-'}   events: {','.join(alert['events'])}")
+            print(f"         why : {alert['explain']}")
+            if alert["iocs"]:
+                print(f"         iocs: {json.dumps(alert['iocs'], sort_keys=True)}")
+    return 0
+
+
+def _osv_dir(cfg: Config, override: str | None) -> str:
+    """Mirror directory: flag > config > default."""
+    if override:
+        return override
+    return str((cfg.intel.get("osv_mirror") or {}).get("dir") or "~/.local/share/damavik/osv")
+
+
+def cmd_pkg_list(args: argparse.Namespace) -> int:
+    cfg = _config(args)
+    store = Store(cfg.db_path())
+    mirror = OsvMirror(_osv_dir(cfg, args.osv_dir))
+    mirror.load_dir()
+    watch = PkgWatch(store=store, mirror=mirror, host=cfg.resolved_host_id())
+    scan: dict[str, int] | None = None
+    if args.scan:
+        snapshot = read_dpkg_status(args.dpkg_status)
+        changes = watch.scan(snapshot)
+        removed = watch.diff_removed(snapshot)
+        scan = {"scanned": len(snapshot), "changes": len(changes), "removed": len(removed)}
+    packages = store.packages(manager=args.manager)
+    vulnerable = watch.vulnerable()
+    store.close()
+    if args.json:
+        print(json.dumps({"scan": scan, "packages": packages, "vulnerable": vulnerable},
+                         sort_keys=True))
+        return 0
+    if scan:
+        print(f"scanned {scan['scanned']} packages, {scan['changes']} changes, "
+              f"{scan['removed']} removed")
+    print(f"{len(packages)} packages tracked, {len(vulnerable)} with a known CVE")
+    for item in vulnerable[: args.limit]:
+        print(
+            f"  {item['severity']:8s} {item['manager']}:{item['name']} {item['version']}"
+            f"  -> {', '.join(item['cves'][:4])}"
+        )
+    return 0
+
+
+def cmd_osv_sync(args: argparse.Namespace) -> int:
+    cfg = _config(args)
+    directory = _osv_dir(cfg, args.dir)
+    mirror = OsvMirror(directory)
+    loaded = mirror.load_dir(directory)
+    store = Store(cfg.db_path())
+    rows = mirror.load_into_store(store) if args.index else 0
+    stats = mirror.stats()
+    stats["rows_indexed"] = rows
+    store.set_meta("osv_dir", directory)
+    store.close()
+    _emit(stats, args.json, f"loaded {stats['advisories']} advisories from {directory}, "
+                            f"indexed {rows} rows")
+    if loaded == 0:
+        print(
+            "hint: place OSV records (*.json) or an ecosystem all.zip in "
+            f"{mirror.directory}",
+            file=sys.stderr,
+        )
+    return 0
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    cfg = _config(args)
+    journal = Journal(cfg.journal_path())
+    report = verify_journal(journal)
+    _emit(report.as_dict(), args.json,
+          f"journal {'OK' if report.ok else 'BROKEN'}: {report.entries} entries"
+          + (f", first bad line {report.first_bad_line}: {report.reason}" if not report.ok else ""))
+    journal.close()
+    return 0 if report.ok else 2
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    cfg = _config(args)
+    store = Store(cfg.db_path())
+    summary = store.summary()
+    ruleset, errors = load_rules_dir(cfg.rules.get("dir", "rules"))
+    summary["rules"] = len(ruleset)
+    summary["rule_errors"] = errors
+    summary["config"] = cfg.source_path or "(defaults)"
+    summary["offline"] = cfg.offline
+    summary["enabled_intel"] = sorted(cfg.enabled_intel())
+    store.close()
+    if args.json:
+        print(json.dumps(summary, sort_keys=True, default=str))
+        return 0
+    for key, value in sorted(summary.items()):
+        print(f"{key:20s} {value}")
+    return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    from .dash.server import serve
+
+    cfg = _config(args)
+    if args.port:
+        cfg.dashboard["port"] = args.port
+    return serve(cfg)
+
+
+def cmd_purge(args: argparse.Namespace) -> int:
+    cfg = _config(args)
+    if not args.yes:
+        print("refusing to purge without --yes", file=sys.stderr)
+        return 2
+    store = Store(cfg.db_path())
+    store.purge()
+    store.close()
+    journal_path = cfg.journal_path()
+    if os.path.exists(journal_path):
+        os.remove(journal_path)
+    alerts = cfg.alerts_path()
+    if os.path.exists(alerts):
+        os.remove(alerts)
+    print("purged database, journal and alerts")
+    return 0
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    """Schema-check a JSONL capture.  Used by CI on every fixture.
+
+    This walks raw lines rather than the normalised stream, because ingest
+    already rejects what it cannot use - validating only the survivors would
+    report a clean bill of health for a broken sensor.
+    """
+    from .normalize import parse_line
+
+    total = accepted = problems = 0
+    with open(os.path.expanduser(args.file), "r", encoding="utf-8", errors="replace") as handle:
+        for lineno, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            total += 1
+            event, reason = parse_line(line)
+            if event is None:
+                problems += 1
+                if reason not in (None, "empty"):
+                    print(f"line {lineno}: {reason}")
+                continue
+            errors = validate_event(event)
+            if errors:
+                problems += 1
+                print(f"line {lineno}: {'; '.join(errors)}")
+    print(f"validated {total} lines from {args.file}: {accepted or total - problems} ok, "
+          f"{problems} invalid")
+    return 1 if problems else 0
+
+
+def cmd_selftest(args: argparse.Namespace) -> int:
+    """End-to-end proof that an install works, without root or network."""
+    from .pipeline import Pipeline
+
+    failures: list[str] = []
+    ruleset, errors = load_rules_dir(find_data(DEFAULT_RULES, args.rules_dir))
+    if errors:
+        failures.extend(errors)
+    if len(ruleset) == 0:
+        failures.append("no rules loaded")
+    fixture = find_data(DEFAULT_FIXTURE, args.fixture)
+    if not os.path.exists(fixture):
+        failures.append(f"demo fixture missing: {fixture}")
+        _emit({"ok": False, "failures": failures}, args.json, "selftest FAILED")
+        return 1
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg = Config(state_dir=tmp, rules={"dir": find_data(DEFAULT_RULES, args.rules_dir)},
+                     offline=True, alerts={"path": "alerts.log", "notify": False,
+                                           "cooldown_s": 0, "min_score": 45})
+        with Pipeline(cfg) as pipeline:
+            pipeline.run_file(fixture)
+            stats = pipeline.stats.as_dict()
+            summary = pipeline.store.summary()
+            summary_alerts = pipeline.store.alerts(limit=50)
+            report = verify_journal(pipeline.journal)
+        if stats["events"] == 0:
+            failures.append("no events were processed")
+        if stats["alerts"] == 0:
+            failures.append("the attack-chain fixture produced no alerts")
+        if not report.ok:
+            failures.append(f"journal chain broken: {report.reason}")
+        unexplained = [
+            alert["id"] for alert in summary_alerts if not alert.get("explain", "").strip()
+        ]
+        if unexplained:
+            failures.append(f"alerts with no explanation: {', '.join(unexplained)}")
+    result = {
+        "ok": not failures,
+        "version": __version__,
+        "schema_version": SCHEMA_VERSION,
+        "rules": len(ruleset),
+        "stats": stats,
+        "summary": summary,
+        "alerts": len(summary_alerts),
+        "journal": report.as_dict(),
+        "failures": failures,
+    }
+    _emit(result, args.json,
+          f"selftest {'OK' if not failures else 'FAILED'}: rules={len(ruleset)} "
+          f"events={stats['events']} alerts={stats['alerts']} "
+          f"journal={'ok' if report.ok else 'broken'}")
+    for failure in failures:
+        print(f"  ! {failure}", file=sys.stderr)
+    return 0 if not failures else 1
+
+
+def cmd_bench(args: argparse.Namespace) -> int:
+    """Measure the pipeline's own budgets."""
+    import tempfile
+
+    from .replay import expand
+
+    fixture = find_data(DEFAULT_FIXTURE, args.fixture)
+    with open(fixture, "r", encoding="utf-8") as handle:
+        base_lines = [line for line in handle if line.strip()]
+    if not base_lines:
+        print(f"no events in {fixture}", file=sys.stderr)
+        return 1
+    lines = list(expand(base_lines, args.events))
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg = Config(state_dir=tmp, rules={"dir": find_data(DEFAULT_RULES, args.rules_dir)}, offline=True,
+                     alerts={"path": "alerts.log", "notify": False, "cooldown_s": 0,
+                             "min_score": 45})
+        started = time.perf_counter()
+        with Pipeline(cfg) as pipeline:
+            pipeline.run(lines)
+            elapsed = time.perf_counter() - started
+            count = pipeline.stats.events
+            rules = len(pipeline.rules)
+        per_event_us = (elapsed / count) * 1e6 if count else 0.0
+        rule_budget_us = per_event_us / rules if rules else 0.0
+        rss_kb = _rss_kb()
+    result = {
+        "events": count,
+        "rules": rules,
+        "elapsed_s": round(elapsed, 4),
+        "us_per_event": round(per_event_us, 1),
+        "us_per_event_per_rule": round(rule_budget_us, 2),
+        "rss_kb": rss_kb,
+        "budget_us_per_event": 1000.0,
+        "within_budget": per_event_us <= 1000.0,
+    }
+    print(json.dumps(result, sort_keys=True))
+    if args.gate and not result["within_budget"]:
+        print("budget gate FAILED", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _rss_kb() -> int:
+    try:
+        with open("/proc/self/status", "r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1])
+    except (OSError, ValueError, IndexError):
+        pass
+    return 0
+
+
+def cmd_demo(args: argparse.Namespace) -> int:
+    """Load the demo capture into a throwaway state dir and print what happened."""
+    import tempfile
+
+    fixture = find_data(DEFAULT_FIXTURE, args.fixture)
+    if not os.path.exists(fixture):
+        print(f"missing fixture: {fixture}", file=sys.stderr)
+        return 1
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg = Config(state_dir=tmp, rules={"dir": find_data(DEFAULT_RULES, args.rules_dir)}, offline=True,
+                     alerts={"path": "alerts.log", "notify": False, "cooldown_s": 0,
+                             "min_score": 45})
+        with Pipeline(cfg) as pipeline:
+            pipeline.run_file(fixture)
+            alerts = pipeline.store.alerts(limit=args.limit)
+            stats = pipeline.stats.as_dict()
+        if args.json:
+            print(json.dumps({"stats": stats, "alerts": alerts}, sort_keys=True, default=str))
+            return 0
+        print(f"processed {stats['events']} events -> {stats['alerts']} alerts "
+              f"(showing {len(alerts)})\n")
+        for alert in alerts:
+            print(f"  [{alert['level'].upper():8s}] {alert['score']:5.1f}  {alert['title']}")
+            print(f"             why: {alert['explain'][:110]}")
+    return 0
+
+
+# ------------------------------------------------------------------- plumbing
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="damavik",
+        description="Local-first threat monitor.  Nothing leaves the box.",
+    )
+    parser.add_argument("--version", action="version", version=f"damavik {__version__}")
+    parser.add_argument("--config", help="path to damavik.yaml")
+    parser.add_argument("--offline", action="store_true",
+                        help="kill every intel plugin for this run")
+    parser.add_argument("--state-dir", help="override the state directory")
+    parser.add_argument("--rules-dir", help="override the rules directory")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    def add(name: str, func: Any, help_text: str) -> argparse.ArgumentParser:
+        child = sub.add_parser(name, help=help_text, description=help_text)
+        child.set_defaults(func=func)
+        return child
+
+    run = add("run", cmd_run, "read JSONL events from stdin or a file and run the pipeline")
+    run.add_argument("--file", help="read from a file instead of stdin")
+    run.add_argument("--json", action="store_true")
+
+    sensor = add("sensor", cmd_sensor, "run the pure-Python reference sensor (no root needed)")
+    sensor.add_argument("--interval", type=float, default=2.0)
+    sensor.add_argument("--once", action="store_true", help="one poll pass, then exit")
+    sensor.add_argument("--out", help="append JSONL to this file instead of stdout")
+    sensor.add_argument("--dns-tail", help="tail a resolver log for dns.query events")
+
+    tail = add("tail", cmd_tail, "stream recorded events")
+    tail.add_argument("--alerts-only", action="store_true")
+    tail.add_argument("--once", action="store_true")
+    tail.add_argument("--interval", type=float, default=1.0)
+    tail.add_argument("--json", action="store_true")
+
+    tree = add("ps-tree", cmd_ps_tree, "render the process tree with risk scores")
+    tree.add_argument("--pid", type=int)
+    tree.add_argument("--json", action="store_true")
+
+    flows = add("flows", cmd_flows, "aggregated flows, optionally for one PID")
+    flows.add_argument("--pid", type=int)
+    flows.add_argument("--limit", type=int, default=50)
+    flows.add_argument("--json", action="store_true")
+
+    top = add("top-risks", cmd_top_risks, "highest-scored events")
+    top.add_argument("--limit", type=int, default=20)
+    top.add_argument("--json", action="store_true")
+
+    alerts = add("alerts", cmd_alerts, "the alert inbox")
+    alerts.add_argument("--limit", type=int, default=20)
+    alerts.add_argument("--status")
+    alerts.add_argument("-v", "--verbose", action="store_true")
+    alerts.add_argument("--json", action="store_true")
+
+    pkg = add("pkg-list", cmd_pkg_list, "package inventory and CVE matches")
+    pkg.add_argument("--manager")
+    pkg.add_argument("--osv-dir", help="OSV mirror directory (default: config)")
+    pkg.add_argument("--scan", action="store_true", help="refresh from /var/lib/dpkg/status")
+    pkg.add_argument("--dpkg-status", default="/var/lib/dpkg/status")
+    pkg.add_argument("--limit", type=int, default=20)
+    pkg.add_argument("--json", action="store_true")
+
+    osv = add("osv-sync", cmd_osv_sync, "load the local OSV mirror into the index")
+    osv.add_argument("--dir", help="directory holding OSV records or all.zip")
+    osv.add_argument("--index", action="store_true", help="also write the cves table")
+    osv.add_argument("--json", action="store_true")
+
+    verify = add("verify", cmd_verify, "verify the hash-chained journal")
+    verify.add_argument("--json", action="store_true")
+
+    status = add("status", cmd_status, "counts, config and rule health")
+    status.add_argument("--json", action="store_true")
+
+    serve = add("serve", cmd_serve, "run the localhost dashboard")
+    serve.add_argument("--port", type=int)
+
+    purge = add("purge", cmd_purge, "delete every trace Damavik has stored")
+    purge.add_argument("--yes", action="store_true")
+
+    validate = add("validate", cmd_validate, "schema-check a JSONL capture")
+    validate.add_argument("file")
+
+    selftest = add("selftest", cmd_selftest, "prove the install works, offline, no root")
+    selftest.add_argument("--fixture")
+    selftest.add_argument("--json", action="store_true")
+
+    bench = add("bench", cmd_bench, "measure pipeline throughput against the budgets")
+    bench.add_argument("--events", type=int, default=2000)
+    bench.add_argument("--fixture")
+    bench.add_argument("--gate", action="store_true", help="exit non-zero if over budget")
+
+    demo = add("demo", cmd_demo, "run the shipped attack-chain capture and show the alerts")
+    demo.add_argument("--fixture")
+    demo.add_argument("--limit", type=int, default=20)
+    demo.add_argument("--json", action="store_true")
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return int(args.func(args))
+    except ConfigError as exc:
+        print(f"config error: {exc}", file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        return 130
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

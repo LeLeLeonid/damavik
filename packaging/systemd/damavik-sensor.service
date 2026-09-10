@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Damavik sensor: emits newline-delimited JSON events on stdout and pipes them
+# into the brain.
+#
+# Two deployment shapes are supported:
+#
+#   1. Pipe (default, P0): this unit runs `damavik sensor | damavik run`. One
+#      process tree, no IPC surface, restarts cleanly. Use
+#      damavik-sensor.service together with damavik-brain@pipe (below) or just
+#      this unit alone.
+#   2. Split units (P1+): run this unit writing to a socket/fifo and the brain
+#      reading it, so the eBPF sensor can be upgraded independently.
+#
+# The sensor is the part that needs privilege: reading /proc across users,
+# fanotify and eBPF all require root or CAP_SYS_ADMIN. The brain does not.
+
+[Unit]
+Description=Damavik sensor - process, flow and DNS events
+After=local-fs.target
+BindsTo=damavik-brain.service
+PartOf=damavik-brain.service
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+Environment=DAMAVIK_STATE_DIR=/var/lib/damavik
+Environment=DAMAVIK_RULES_DIR=/usr/share/damavik/rules
+ExecStart=/bin/sh -c '/usr/local/bin/damavik sensor --interval 2 | /usr/local/bin/damavik run --config /etc/damavik/damavik.yaml'
+Restart=always
+RestartSec=5s
+TimeoutStopSec=20s
+
+# A sensor restart must be visible, not silent: it is exactly what malware would
+# try to do first. The brain records the gap as a sensor.meta heartbeat break.
+WatchdogSec=120s
+
+# --- hardening -------------------------------------------------------------
+# Deliberately weaker than the brain: the sensor legitimately reads /proc for
+# all users. It still gets no network, no home directory and no writable paths
+# except the state directory.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=no
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=no
+ProtectKernelModules=no
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/damavik
+
+# Sensor budget: RAM < 50 MB.
+MemoryMax=96M
+TasksMax=32
+CPUQuota=50%
+
+# P1: the eBPF sensor additionally needs CAP_BPF/CAP_PERFMON (or CAP_SYS_ADMIN
+# on kernels < 5.8) and access to /sys/kernel/btf/vmlinux. When that lands,
+# drop ProtectKernelTunables=no is kept and add:
+#   AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_SYS_PTRACE
+#   CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_SYS_PTRACE
+
+[Install]
+WantedBy=multi-user.target
