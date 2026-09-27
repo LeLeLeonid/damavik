@@ -6,10 +6,11 @@ from __future__ import annotations
 
 import json
 import os
+import time
 
 import pytest
-
 from damavik.cli import main
+from damavik.schema import iso_to_ms
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 CHAIN = os.path.join(FIXTURES, "attack-chain.jsonl")
@@ -18,11 +19,13 @@ OSV_DIR = os.path.join(FIXTURES, "osv")
 
 
 @pytest.fixture()
-def cli(tmp_path, repo_root, rules_dir):  # noqa: ANN001
+def cli(tmp_path, repo_root, rules_dir):
     def run(*args, expect=0):
         argv = [
-            "--state-dir", str(tmp_path),
-            "--rules-dir", rules_dir,
+            "--state-dir",
+            str(tmp_path),
+            "--rules-dir",
+            rules_dir,
             "--offline",
             *args,
         ]
@@ -55,6 +58,54 @@ def test_run_then_status(cli, capsys):
     assert summary["alerts"] > 0
     assert summary["offline"] is True
     assert summary["rules"] >= 15
+
+
+def test_an_old_capture_is_still_stored_and_reported_as_stale(cli, capsys):
+    """The shipped capture is dated in the past, by definition.
+
+    Loading it must keep every event (it is the batch this run loaded) and say
+    so, instead of ingesting 35 events and deleting 35 events in the same call.
+    """
+    cli("run", "--file", CHAIN, "--json")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["events"] == 35
+    assert payload["retention_removed"]["events"] == 0
+    assert payload["stale_capture_s"] > 86400
+    cli("status", "--json")
+    assert json.loads(capsys.readouterr().out)["events"] == 35
+
+
+def test_rebase_replays_a_capture_on_the_current_clock(cli, capsys):
+    cli("run", "--file", CHAIN, "--rebase", "--json")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["events"] == 35
+    assert payload["stale_capture_s"] == 0
+    cli("top-risks", "--limit", "1", "--json")
+    row = json.loads(capsys.readouterr().out)[0]
+    age_s = time.time() - iso_to_ms(row["ts"]) / 1000.0
+    assert 0 <= age_s < 300, "a rebased capture must look live"
+
+
+def test_a_later_run_prunes_the_history_it_inherited(cli, capsys):
+    """Retention moved from "delete what I just loaded" to "delete what I
+    inherited", which is the only version that leaves a replay intact."""
+    cli("run", "--file", CHAIN, "--json")
+    capsys.readouterr()
+    cli("run", "--file", CHAIN, "--json")
+    output = capsys.readouterr()
+    assert "retention: pruned 35 events" in output.err
+    assert json.loads(output.out)["events"] == 35
+
+
+def test_selftest_proves_the_index_holds_the_evidence(cli, capsys):
+    """selftest is the gate install.sh refuses to install without, so it has to
+    look at what was stored, not at in-memory counters."""
+    cli("selftest", "--json")
+    report = json.loads(capsys.readouterr().out)
+    assert report["ok"] is True, report["failures"]
+    assert report["stats"]["events"] == report["summary"]["events"] == 35
+    assert report["alerts"] == report["stats"]["alerts"] > 0
+    assert report["journal"]["ok"] is True
 
 
 def test_status_human_readable(cli, capsys):
@@ -164,13 +215,57 @@ def test_verify_detects_tampering(cli, capsys, tmp_path):
     journal = tmp_path / "journal.jsonl"
     lines = journal.read_text(encoding="utf-8").splitlines()
     record = json.loads(lines[0])
-    record["rec"]["event"]["score"] = 99.0          # a real semantic change
+    record["rec"]["event"]["score"] = 99.0  # a real semantic change
     lines[0] = json.dumps(record, sort_keys=True)
     journal.write_text("\n".join(lines) + "\n", encoding="utf-8")
     cli("verify", "--json", expect=2)
     report = json.loads(capsys.readouterr().out)
     assert report["ok"] is False
     assert report["first_bad_line"] == 1
+
+
+def test_verify_says_nothing_was_ingested_instead_of_ok(cli, capsys):
+    """A missing journal is only fine while there is nothing it should hold."""
+    cli("verify", "--json")
+    report = json.loads(capsys.readouterr().out)
+    assert report["ok"] is True
+    assert report["entries"] == 0
+    assert report["reason"] == "no journal yet"
+
+
+def test_verify_notices_a_deleted_audit_trail(cli, capsys, tmp_path):
+    """Events in the index + no journal = the trail was deleted, not never written."""
+    cli("run", "--file", CHAIN)
+    capsys.readouterr()
+    os.remove(tmp_path / "journal.jsonl")
+    cli("verify", "--json", expect=2)
+    report = json.loads(capsys.readouterr().out)
+    assert report["ok"] is False
+    assert report["reason"] == "journal missing"
+
+
+def test_option_order_does_not_matter(cli, capsys, tmp_path, rules_dir):
+    """The units ship `run --config …`: runtime options work after a subcommand."""
+    code = main(
+        [
+            "--state-dir",
+            str(tmp_path),
+            "--rules-dir",
+            rules_dir,
+            "run",
+            "--offline",
+            "--file",
+            CHAIN,
+            "--json",
+        ]
+    )
+    assert code == 0
+    stats = json.loads(capsys.readouterr().out)
+    assert stats["events"] == 35
+    # --config is accepted after the subcommand, which is the form the systemd
+    # units use; a global-only --config made every unit unstartable.
+    assert main(["status", "--state-dir", str(tmp_path), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["events"] == 35
 
 
 def test_reserialising_a_record_is_not_tampering(cli, capsys, tmp_path):
@@ -180,7 +275,7 @@ def test_reserialising_a_record_is_not_tampering(cli, capsys, tmp_path):
     journal = tmp_path / "journal.jsonl"
     lines = journal.read_text(encoding="utf-8").splitlines()
     respaced = [json.dumps(json.loads(line), sort_keys=True) for line in lines]
-    assert respaced[0] != lines[0]                  # genuinely different bytes
+    assert respaced[0] != lines[0]  # genuinely different bytes
     journal.write_text("\n".join(respaced) + "\n", encoding="utf-8")
     cli("verify", "--json")
     assert json.loads(capsys.readouterr().out)["ok"] is True
@@ -193,18 +288,11 @@ def test_validate_fixture(cli, capsys):
 
 def test_validate_reports_bad_events(cli, capsys, tmp_path):
     bad = tmp_path / "bad.jsonl"
-    bad.write_text(
-        "\n".join(
-            [
-                '{"ts":"2026-09-10T10:00:00Z","type":"proc.exec",'
-                '"proc":{"pid":1,"sha256":"not-a-hash"}}',
-                '{"ts":"2026-09-10T10:00:01Z","type":"net.flow",'
-                '"net":{"dst":"1.2.3.4","dport":99999}}',
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    lines = [
+        ('{"ts":"2026-09-10T10:00:00Z","type":"proc.exec","proc":{"pid":1,"sha256":"not-a-hash"}}'),
+        ('{"ts":"2026-09-10T10:00:01Z","type":"net.flow","net":{"dst":"1.2.3.4","dport":99999}}'),
+    ]
+    bad.write_text("\n".join(lines) + "\n", encoding="utf-8")
     cli("validate", str(bad), expect=1)
     out = capsys.readouterr().out
     assert "2 invalid" in out
@@ -335,10 +423,16 @@ def test_defaults_resolve_from_the_checkout_not_the_cwd(tmp_path, monkeypatch, c
 
 def test_bench_works_from_any_directory(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    code = main([
-        "--state-dir", str(tmp_path / "state"), "--offline",
-        "bench", "--events", "120",
-    ])
+    code = main(
+        [
+            "--state-dir",
+            str(tmp_path / "state"),
+            "--offline",
+            "bench",
+            "--events",
+            "120",
+        ]
+    )
     assert code == 0
     report = json.loads(capsys.readouterr().out)
     assert report["events"] == 120

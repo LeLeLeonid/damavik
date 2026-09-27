@@ -7,7 +7,6 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from damavik.config import Config, ConfigError, from_dict, load, validate
 
 MINIMAL = """
@@ -82,9 +81,7 @@ def test_offline_disables_every_provider():
 
 
 def test_enabled_keyless_providers_are_listed():
-    cfg = from_dict(
-        {"intel": {"osv_mirror": {"enabled": False}, "bazaar": {"enabled": True}}}
-    )
+    cfg = from_dict({"intel": {"osv_mirror": {"enabled": False}, "bazaar": {"enabled": True}}})
     assert set(cfg.enabled_intel()) == {"bazaar"}
 
 
@@ -112,3 +109,60 @@ def test_example_config_in_repo_is_valid(repo_root):
     assert os.path.exists(path), path
     cfg = load(path)
     assert cfg.dashboard["bind"] == "127.0.0.1"
+
+
+# --- environment overrides ---------------------------------------------------
+# The systemd units ship DAMAVIK_STATE_DIR / DAMAVIK_RULES_DIR.  A sandboxed
+# brain cannot take the config file's ~/.local/state for an answer (ProtectHome
+# and ProtectSystem=strict make it unwritable), so the units' Environment= lines
+# have to reach the Config object.  Precedence: file < environment < command line.
+
+
+def test_env_overrides_state_dir_and_rules_dir(monkeypatch, tmp_path):
+    monkeypatch.setenv("DAMAVIK_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("DAMAVIK_RULES_DIR", str(tmp_path / "rules"))
+    cfg = load(None)
+    assert cfg.state_dir == str(tmp_path / "state")
+    assert cfg.rules["dir"] == str(tmp_path / "rules")
+
+
+def test_env_overrides_win_over_the_config_file(monkeypatch, tmp_path):
+    path = tmp_path / "damavik.yaml"
+    path.write_text("state_dir: /from/file\n", encoding="utf-8")
+    monkeypatch.setenv("DAMAVIK_STATE_DIR", "/from/env")
+    assert load(str(path)).state_dir == "/from/env"
+
+
+def test_command_line_wins_over_the_environment(monkeypatch, tmp_path):
+    from damavik.cli import main
+
+    monkeypatch.setenv("DAMAVIK_STATE_DIR", str(tmp_path / "from-env"))
+    code = main(["--state-dir", str(tmp_path / "cli"), "--offline", "status", "--json"])
+    assert code == 0
+    assert os.path.isdir(tmp_path / "cli")
+    assert not os.path.exists(tmp_path / "from-env")
+
+
+def test_env_flags_and_numbers_are_parsed(monkeypatch):
+    monkeypatch.setenv("DAMAVIK_OFFLINE", "yes")
+    monkeypatch.setenv("DAMAVIK_RETENTION_DAYS", "3")
+    monkeypatch.setenv("DAMAVIK_HOST_ID", "unit-host")
+    cfg = load(None)
+    assert cfg.offline is True
+    assert cfg.retention_days == 3
+    assert cfg.host_id == "unit-host"
+
+
+def test_a_broken_env_value_is_a_config_error_not_a_traceback(monkeypatch):
+    monkeypatch.setenv("DAMAVIK_RETENTION_DAYS", "soon")
+    with pytest.raises(ConfigError):
+        load(None)
+    monkeypatch.delenv("DAMAVIK_RETENTION_DAYS")
+    monkeypatch.setenv("DAMAVIK_RETENTION_DAYS", "-1")
+    with pytest.raises(ConfigError):
+        load(None)
+
+
+def test_unrelated_environment_variables_are_ignored(monkeypatch):
+    monkeypatch.setenv("DAMAVIK_SOMETHING_ELSE", "1")
+    assert load(None).retention_days == 7

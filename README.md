@@ -20,14 +20,42 @@ python3 -m damavik.cli serve         # dashboard on 127.0.0.1 (prints a token)
 python3 -m damavik.cli ps-tree       # live process tree, scored
 ```
 
-Every command takes `--json`. Install as a command: `pip install --user ./brain`.
+Every command takes `--json`. Install it as a command from the repository
+root: `pip install .` (or `pip install --user .`). The wheel carries the
+ruleset and a demo capture, so `damavik selftest` works outside a checkout;
+`DAMAVIK_RULES_DIR`/`--rules-dir` point it at your own rules instead.
+
+A capture is replayed with the timestamps it was recorded with - that is the
+point of a forensic reload. `damavik run --file capture.jsonl --rebase` replays
+it on the current clock instead, which is what `demo`, `selftest` and `bench` do
+internally, so a shipped fixture cannot age into an empty dashboard.
+
+## Install it as a service
+
+```sh
+sudo ./packaging/install.sh            # DRY_RUN=1 to preview, ENABLE=0 to skip starting
+```
+
+No package manager, no downloads: the installer copies this checkout to
+`/usr/share/damavik`, writes `/usr/local/bin/damavik`, keeps an existing
+`/etc/damavik/damavik.yaml`, creates the state directory and installs two
+hardened units — `damavik-sensor.service` (the whole monitor: `sensor | run`)
+and `damavik-dashboard.service` (`serve` on 127.0.0.1). It then runs the
+*installed* command's `selftest` and fails loudly if that does not work.
+Installs into a prefix you own need no root: `ALLOW_NONROOT=1 PREFIX=~/.local
+./packaging/install.sh`.
+
+Every setting in `damavik.yaml` can be overridden from the environment, which is
+how the units pin their paths (`file < environment < command line`):
+`DAMAVIK_STATE_DIR`, `DAMAVIK_RULES_DIR`, `DAMAVIK_HOST_ID`,
+`DAMAVIK_RETENTION_DAYS`, `DAMAVIK_OFFLINE`.
 
 ## Commands
 
 | | |
 |---|---|
 | `sensor` | emit events from `/proc` (`--once`, `--interval`, `--out`, `--dns-tail`) |
-| `run` | score a stream or `--file`, write the index + journal + alerts |
+| `run` | score a stream or `--file` (`--rebase` replays on the current clock) |
 | `alerts` | ranked alerts; `-v` adds explanations and IOCs |
 | `ps-tree` | process tree with a risk score per node |
 | `flows` | aggregated connections, `--pid` to filter |
@@ -38,7 +66,7 @@ Every command takes `--json`. Install as a command: `pip install --user ./brain`
 | `status` | counts, config path, rule health |
 | `verify` | journal integrity; exit 2 names the first bad line |
 | `validate` | schema-check a capture |
-| `selftest` | end-to-end proof the install works |
+| `selftest` | end-to-end proof the install works: rules, stored alerts, journal |
 | `bench` | throughput and memory against the budgets, `--gate` for CI |
 | `purge` | delete database, journal and alerts (`--yes`) |
 
@@ -58,12 +86,29 @@ empty explanation fails `selftest`. Optional cloud lookups (hash/domain
 verdicts, local CVE mirror) are **off by default** and `--offline` is a real
 kill-switch.
 
+### Time, retention and replays
+
+Correlation windows ("six connections to one destination in two minutes") are
+measured on the **event clock**, not the wall clock: a capture replayed in a
+millisecond still correlates on the timeline it recorded, and a live sensor
+behaves identically because its timestamps *are* now.
+
+`retention_days` prunes the index a run **inherits**, at the moment that run
+starts. A run never deletes the batch it is processing - otherwise
+`run --file capture.jsonl` on anything older than the window would ingest every
+event and delete every event in the same call, leaving `demo` reporting
+"27 alerts (showing 0)" over an empty database.
+
 ## Development
 
 ```sh
-python3 -m pytest tests/ -q          # 381 tests, ~14 s, no network, no root
+python3 -m pytest tests/ -q          # 417 tests, ~16 s, no network, no root
 python3 -m damavik.cli bench --gate  # performance budgets
+python3 -m ruff check brain tests && python3 -m ruff format --check brain tests
 ```
+
+[`docs/PLAN.md`](docs/PLAN.md) is the audit that produced the current shape of
+the project: what was broken, why, and what is queued behind it.
 
 Every rule ships with a true-positive and a false-positive fixture; the suite
 fails otherwise. False-positive reports are the most useful contribution: send

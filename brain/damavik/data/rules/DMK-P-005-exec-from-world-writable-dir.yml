@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Execution from a world-writable directory
+id: DMK-P-005
+status: stable
+level: medium
+description: >-
+  Binaries in /tmp, /var/tmp or /dev/shm are written by anyone and disappear on
+  reboot.  Packaged software never runs from there.
+tags:
+  - attack.execution
+  - attack.t1204
+logsource:
+  category: process_creation
+selection:
+  proc.exe|startswith:
+    - /tmp/
+    - /var/tmp/
+    - /dev/shm/
+condition: selection

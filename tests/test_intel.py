@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from damavik.intel.base import TTL_CLEAN, TTL_MALICIOUS, Provider, TokenBucket, Verdict
 from damavik.intel.bazaar import MalwareBazaar
 from damavik.intel.urlhaus import URLhaus
@@ -74,13 +73,11 @@ def test_token_bucket_limits_bursts():
     assert bucket.take(now=now)
     assert bucket.take(now=now)
     assert bucket.take(now=now) is False
-    assert bucket.take(now=now + 1.0)          # one token refilled
+    assert bucket.take(now=now + 1.0)  # one token refilled
 
 
 def test_rate_limited_lookup_does_not_raise():
-    provider = FakeProvider(
-        transport=transport(b'{"verdict":"malicious"}'), rate=0.0, capacity=1.0
-    )
+    provider = FakeProvider(transport=transport(b'{"verdict":"malicious"}'), rate=0.0, capacity=1.0)
     first = provider.lookup("sha256", "a" * 64)
     second = provider.lookup("sha256", "b" * 64)
     assert first.verdict == "malicious"
@@ -137,8 +134,13 @@ def test_bazaar_known_hash_is_malicious():
     body = json.dumps(
         {
             "query_status": "ok",
-            "data": [{"signature": "AgentTesla", "tags": ["exe", "rat"],
-                      "intelligence": {"references": ["https://example/x"]}}],
+            "data": [
+                {
+                    "signature": "AgentTesla",
+                    "tags": ["exe", "rat"],
+                    "intelligence": {"references": ["https://example/x"]},
+                }
+            ],
         }
     ).encode()
     provider = MalwareBazaar(transport=transport(body))
@@ -169,7 +171,10 @@ def test_bazaar_only_accepts_https():
 
 def test_urlhaus_active_url_is_malicious():
     body = json.dumps(
-        {"query_status": "ok", "urls": [{"url": "https://bad/x", "url_status": "online"}]}
+        {
+            "query_status": "ok",
+            "urls": [{"url": "https://bad/x", "url_status": "online"}],
+        }
     ).encode()
     provider = URLhaus(transport=transport(body))
     assert provider.lookup("url", "https://bad/x").verdict == "malicious"
@@ -177,7 +182,10 @@ def test_urlhaus_active_url_is_malicious():
 
 def test_urlhaus_offline_only_is_suspicious():
     body = json.dumps(
-        {"query_status": "ok", "urls": [{"url": "https://bad/x", "url_status": "offline"}]}
+        {
+            "query_status": "ok",
+            "urls": [{"url": "https://bad/x", "url_status": "offline"}],
+        }
     ).encode()
     provider = URLhaus(transport=transport(body))
     assert provider.lookup("url", "https://bad/x").verdict == "suspicious"

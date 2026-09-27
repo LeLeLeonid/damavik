@@ -8,7 +8,9 @@
 
 host_id: auto            # "auto" uses the hostname; set a stable id for fleets
 offline: false           # true = kill every intel plugin, forever, for this run
-retention_days: 7        # events older than this are deleted on every finish()
+retention_days: 7        # events older than this are pruned when a run starts;
+                         # the batch a run is processing is never pruned by it,
+                         # so replaying an old capture keeps every event
 state_dir: ~/.local/state/damavik
 
 sensor:
@@ -71,3 +73,8 @@ scoring:
 
 rules:
   dir: rules
+
+# Environment overrides (they win over this file, the command line wins over
+# them): DAMAVIK_STATE_DIR, DAMAVIK_RULES_DIR, DAMAVIK_HOST_ID,
+# DAMAVIK_RETENTION_DAYS, DAMAVIK_OFFLINE.  The systemd units use the first two:
+# a sandboxed service cannot rely on ~/.local/state being writable.

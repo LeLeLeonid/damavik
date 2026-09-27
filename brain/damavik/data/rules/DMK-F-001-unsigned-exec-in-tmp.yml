@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Unsigned binary executed from a temporary directory
+id: DMK-F-001
+status: stable
+level: medium
+description: >-
+  Combines two weak signals into a strong one: no code signature and a
+  world-writable path.
+tags:
+  - attack.defense_evasion
+logsource:
+  category: process_creation
+selection:
+  proc.signed: false
+  proc.exe|startswith:
+    - /tmp/
+    - /var/tmp/
+    - /dev/shm/
+condition: selection

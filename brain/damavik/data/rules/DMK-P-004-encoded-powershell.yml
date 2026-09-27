@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Obfuscated PowerShell invocation
+id: DMK-P-004
+status: stable
+level: high
+description: >-
+  Encoded or hidden-window PowerShell is used to hide a payload from the
+  command-line record.  Rare in legitimate administration.
+tags:
+  - attack.defense_evasion
+  - attack.t1027
+logsource:
+  category: process_creation
+selection:
+  meta.cmd_is_encoded: true
+  proc.exe|endswith:
+    - powershell.exe
+    - pwsh.exe
+    - pwsh
+condition: selection

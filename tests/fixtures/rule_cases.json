@@ -556,6 +556,29 @@
         "tags": [],
         "ts": "2026-09-10T10:00:00.000Z",
         "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 4444,
+          "dst": "127.0.0.1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
       }
     ],
     "tp": [
@@ -600,6 +623,30 @@
         "proc": {
           "exe": "/tmp/.x/payload",
           "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "age_ms": 800,
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "127.0.0.1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
         },
         "score": 0.0,
         "tags": [],
@@ -689,6 +736,696 @@
         "proc": {
           "exe": "/tmp/.x/payload",
           "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "127.0.0.1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "127.0.0.1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "127.0.0.1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "127.0.0.1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "127.0.0.1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "127.0.0.1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "127.0.0.1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "127.0.0.1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "127.0.0.1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "127.0.0.1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_private": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "10.0.0.5",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_private": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "10.0.0.5",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_private": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "10.0.0.5",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_private": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "10.0.0.5",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_private": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "10.0.0.5",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_private": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "10.0.0.5",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_private": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "10.0.0.5",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_private": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "10.0.0.5",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_private": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "10.0.0.5",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_private": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "10.0.0.5",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "fe80::1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "fe80::1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "fe80::1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "fe80::1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "fe80::1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "fe80::1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "fe80::1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "fe80::1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "fe80::1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 0,
+          "dport": 443,
+          "dst": "fe80::1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
         },
         "score": 0.0,
         "tags": [],
@@ -835,6 +1572,29 @@
         "proc": {
           "exe": "/tmp/.x/payload",
           "pid": 3000
+        },
+        "score": 0.0,
+        "tags": [],
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "net.flow"
+      },
+      {
+        "host": "t",
+        "meta": {
+          "is_local": true
+        },
+        "net": {
+          "bytes_in": 0,
+          "bytes_out": 6000000,
+          "dport": 443,
+          "dst": "127.0.0.1",
+          "proto": "tcp",
+          "sport": 50000,
+          "src": "10.0.0.24"
+        },
+        "proc": {
+          "exe": "/usr/bin/telemetry",
+          "pid": 4242
         },
         "score": 0.0,
         "tags": [],

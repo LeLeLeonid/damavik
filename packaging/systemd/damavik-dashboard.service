@@ -1,37 +1,36 @@
 # SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
 # SPDX-License-Identifier: GPL-3.0-only
 #
-# Damavik brain: reads the sensor's JSONL stream from stdin, scores it, writes
-# the journal, the SQLite index and alerts.log, and serves the dashboard on
-# 127.0.0.1.
+# Damavik dashboard: serves the JSON API and the static UI on 127.0.0.1.
 #
-# The brain is separated from the sensor on purpose: either side can be
-# restarted, upgraded or crash without taking the other down, and the sensor
-# can be replaced (sensor-py -> eBPF) without touching this unit.
+# This unit used to be `damavik-brain.service`, running `damavik run` with
+# StandardInput=null.  A brain with no input reads EOF, ingests nothing, exits
+# 0, and a Type=simple unit with Restart=on-failure is then simply inactive -
+# so the packaged install monitored nothing while claiming otherwise.  The
+# scoring half of the brain lives in damavik-sensor.service (sensor | run);
+# a separate brain reading a socket/FIFO instead of a pipe arrives with the
+# eBPF sensor in P1.
+#
+# The dashboard is optional: `systemctl stop damavik-dashboard` leaves the
+# journal and the index intact.
 
 [Unit]
-Description=Damavik brain - local host threat monitor
+Description=Damavik dashboard - local threat monitor on 127.0.0.1
 After=network.target
-# Not Requires=: the brain must still run and keep its data if the sensor is
-# stopped for maintenance.
 
 [Service]
 Type=simple
-# DAMAVIK_SENSOR_CMD is the sensor command; see the matching damavik-sensor
-# service for the packaged alternative (a pipe between two units).
 Environment=DAMAVIK_STATE_DIR=/var/lib/damavik
 Environment=DAMAVIK_RULES_DIR=/usr/share/damavik/rules
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/local/bin/damavik run --config /etc/damavik/damavik.yaml
-StandardInput=null
+ExecStart=/usr/local/bin/damavik serve --config /etc/damavik/damavik.yaml
 Restart=on-failure
 RestartSec=5s
-TimeoutStopSec=30s
+TimeoutStopSec=10s
 
 # --- hardening -------------------------------------------------------------
 # A monitor that can be trivially tampered with is worse than none, so the
-# brain gets the tightest profile that still lets it read the sensor stream and
-# write its own state.
+# dashboard gets the tightest profile that still lets it read its own index.
 NoNewPrivileges=yes
 PrivateTmp=yes
 PrivateDevices=yes
@@ -48,7 +47,8 @@ MemoryDenyWriteExecute=yes
 SystemCallFilter=@system-service
 SystemCallArchitectures=native
 
-# Only its own state directory is writable.
+# Only its own state directory is writable.  The dashboard opens the index
+# read-mostly, but SQLite needs the directory to exist and be writable.
 ReadWritePaths=/var/lib/damavik
 
 # Resource caps: brain RSS budget is 150 MB. A runaway brain is killed here

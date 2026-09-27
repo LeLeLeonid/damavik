@@ -19,12 +19,14 @@ no network access anywhere in this module.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sqlite3
 import threading
 import time
-from typing import Any, Iterable, Sequence
+from collections.abc import Iterable, Sequence
+from typing import Any
 
 from . import SCHEMA_VERSION
 from .schema import event_id, iso_to_ms
@@ -563,9 +565,7 @@ class Store:
             return
         with self._lock:
             rows = [(self._seen_counts[k], self._seen_last[k], k) for k in self._seen_dirty]
-            self.conn.executemany(
-                "UPDATE first_seen SET count=?, last_ts=? WHERE key=?", rows
-            )
+            self.conn.executemany("UPDATE first_seen SET count=?, last_ts=? WHERE key=?", rows)
             self._seen_dirty.clear()
 
     def first_seen(self, kind: str, key: str) -> dict[str, Any] | None:
@@ -587,7 +587,13 @@ class Store:
 
     # -- packages ----------------------------------------------------------
     def upsert_package(
-        self, manager: str, name: str, version: str, ts: str, *, source: str | None = None,
+        self,
+        manager: str,
+        name: str,
+        version: str,
+        ts: str,
+        *,
+        source: str | None = None,
         arch: str | None = None,
     ) -> bool:
         """Insert or refresh a package.  Returns True when newly installed."""
@@ -613,8 +619,7 @@ class Store:
     def mark_removed(self, manager: str, name: str, ts: str) -> bool:
         with self._lock:
             cur = self.conn.execute(
-                "UPDATE packages SET removed=1, last_ts=? WHERE manager=? AND name=? "
-                "AND removed=0",
+                "UPDATE packages SET removed=1, last_ts=? WHERE manager=? AND name=? AND removed=0",
                 (ts, manager, name),
             )
             return cur.rowcount > 0
@@ -659,9 +664,7 @@ class Store:
     def cache_put(
         self, kind: str, value: str, verdict: dict[str, Any], ttl_s: float, ts: str
     ) -> None:
-        expires = time.strftime(
-            "%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + ttl_s)
-        )
+        expires = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + ttl_s))
         with self._lock:
             self.conn.execute(
                 """INSERT OR REPLACE INTO intel_cache
@@ -749,20 +752,21 @@ class Store:
 
     # -- maintenance -------------------------------------------------------
     def apply_retention(self, days: int) -> dict[str, int]:
+        """Delete rows older than ``days``; ``0`` means keep everything.
+
+        Called once when a run starts (``Pipeline.apply_storage_policy``), which
+        is the only thing that keeps it honest: a capture replayed through the
+        pipeline carries *recorded* timestamps, so pruning after ingest deletes
+        the very batch the run was asked to process.
+        """
         if days <= 0:
             return {"events": 0, "alerts": 0, "flows": 0}
         cutoff_ms = int((time.time() - days * 86400) * 1000)
         cutoff_day = time.strftime("%Y-%m-%d", time.gmtime(time.time() - days * 86400))
         with self._lock:
-            events = self.conn.execute(
-                "DELETE FROM events WHERE ts_ms < ?", (cutoff_ms,)
-            ).rowcount
-            alerts = self.conn.execute(
-                "DELETE FROM alerts WHERE ts_ms < ?", (cutoff_ms,)
-            ).rowcount
-            flows = self.conn.execute(
-                "DELETE FROM flow_agg WHERE day < ?", (cutoff_day,)
-            ).rowcount
+            events = self.conn.execute("DELETE FROM events WHERE ts_ms < ?", (cutoff_ms,)).rowcount
+            alerts = self.conn.execute("DELETE FROM alerts WHERE ts_ms < ?", (cutoff_ms,)).rowcount
+            flows = self.conn.execute("DELETE FROM flow_agg WHERE day < ?", (cutoff_day,)).rowcount
             self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         return {"events": int(events or 0), "alerts": int(alerts or 0), "flows": int(flows or 0)}
 
@@ -777,9 +781,7 @@ class Store:
             "alerts": one("SELECT COUNT(*) FROM alerts"),
             "open_alerts": one("SELECT COUNT(*) FROM alerts WHERE status='open'"),
             "packages": one("SELECT COUNT(*) FROM packages WHERE removed=0"),
-            "packages_with_cve": one(
-                "SELECT COUNT(DISTINCT package) FROM cves"
-            ),
+            "packages_with_cve": one("SELECT COUNT(DISTINCT package) FROM cves"),
             "cves": one("SELECT COUNT(*) FROM cves"),
             "first_seen_keys": one("SELECT COUNT(*) FROM first_seen"),
             "intel_cache": one("SELECT COUNT(*) FROM intel_cache"),
@@ -816,10 +818,8 @@ class Store:
         self.flush_first_seen()
         with self._lock:
             for conn in self._connections:
-                try:
+                with contextlib.suppress(sqlite3.Error):
                     conn.close()
-                except sqlite3.Error:
-                    pass
             self._connections.clear()
         self._local = threading.local()
 

@@ -14,7 +14,6 @@ import os
 import time
 
 import pytest
-
 from damavik.pipeline import Pipeline
 from damavik.rules import RuleSet, load_rules_dir
 
@@ -27,20 +26,25 @@ def repeated(path: str, count: int) -> list[str]:
     """Distinct events - ingest dedupes identical ones by design."""
     from damavik.replay import expand
 
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         base = [line for line in handle if line.strip()]
     return list(expand(base, count))
 
 
 @pytest.fixture(scope="module")
-def measurement(tmp_path_factory, repo_root, attack_chain):  # noqa: ANN001
+def measurement(tmp_path_factory, repo_root, attack_chain):
     from damavik.config import Config
 
     config = Config(
         state_dir=str(tmp_path_factory.mktemp("bench")),
         offline=True,
         rules={"dir": os.path.join(repo_root, "rules")},
-        alerts={"path": "alerts.log", "notify": False, "cooldown_s": 0, "min_score": 45.0},
+        alerts={
+            "path": "alerts.log",
+            "notify": False,
+            "cooldown_s": 0,
+            "min_score": 45.0,
+        },
     )
     lines = repeated(attack_chain, EVENTS)
     started = time.perf_counter()
@@ -65,7 +69,7 @@ def measurement(tmp_path_factory, repo_root, attack_chain):  # noqa: ANN001
 
 def _rss_mb() -> float:
     try:
-        with open("/proc/self/status", "r", encoding="utf-8") as handle:
+        with open("/proc/self/status", encoding="utf-8") as handle:
             for line in handle:
                 if line.startswith("VmRSS:"):
                     return int(line.split()[1]) / 1024.0
@@ -112,8 +116,14 @@ def test_rule_evaluation_is_sub_millisecond(rules_dir):
     event = {
         "ts": "2026-09-10T10:00:00.000Z",
         "type": "proc.exec",
-        "proc": {"pid": 1, "ppid": 2, "exe": "/usr/bin/thing", "cmd": "thing",
-                 "sha256": "a" * 64, "signed": True},
+        "proc": {
+            "pid": 1,
+            "ppid": 2,
+            "exe": "/usr/bin/thing",
+            "cmd": "thing",
+            "sha256": "a" * 64,
+            "signed": True,
+        },
         "meta": {"parent_is_sensitive": False, "child_is_shell": False},
     }
     started = time.perf_counter()
@@ -132,8 +142,11 @@ def test_scoring_a_clean_event_is_cheap(store):
     from damavik.score import Scorer
 
     scorer = Scorer(store=store)
-    event = {"ts": "2026-09-10T10:00:00.000Z", "type": "proc.exec",
-             "proc": {"pid": 1, "exe": "/usr/bin/thing", "sha256": "b" * 64, "signed": True}}
+    event = {
+        "ts": "2026-09-10T10:00:00.000Z",
+        "type": "proc.exec",
+        "proc": {"pid": 1, "exe": "/usr/bin/thing", "sha256": "b" * 64, "signed": True},
+    }
     started = time.perf_counter()
     for index in range(5000):
         scorer.score({**event, "proc": {**event["proc"], "pid": index}})
@@ -144,9 +157,19 @@ def test_scoring_a_clean_event_is_cheap(store):
 def test_bench_command_matches_the_library(config, attack_chain, capsys):
     from damavik.cli import main
 
-    code = main(["--state-dir", os.path.dirname(config.db_path()),
-                 "--rules-dir", config.rules["dir"], "--offline",
-                 "bench", "--events", "300", "--gate"])
+    code = main(
+        [
+            "--state-dir",
+            os.path.dirname(config.db_path()),
+            "--rules-dir",
+            config.rules["dir"],
+            "--offline",
+            "bench",
+            "--events",
+            "300",
+            "--gate",
+        ]
+    )
     assert code == 0
     import json
 

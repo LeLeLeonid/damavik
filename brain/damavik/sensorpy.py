@@ -18,7 +18,7 @@ Coverage, stated honestly:
                      readable (same-user processes)
 ``dns.query``        no - needs a kernel hook; use the eBPF sensor
                      or ``--dns-tail`` on a resolver log
-``pkg.event``        via ``damavik pkg-scan`` (dpkg status parsing)
+``pkg.event``        via ``damavik pkg-list --scan`` (dpkg status parsing)
 ===================  ============================================
 """
 
@@ -31,8 +31,9 @@ import re
 import socket
 import sys
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any
 
 PROC = "/proc"
 MAX_HASH_BYTES = 64 * 1024 * 1024
@@ -372,7 +373,7 @@ def parse_dns_line(line: str) -> tuple[str, str] | None:
 
 def tail_dns_log(path: str, sensor: ProcSensor, out: Any) -> None:
     """Follow a resolver log and emit ``dns.query`` events forever."""
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+    with open(path, encoding="utf-8", errors="replace") as handle:
         handle.seek(0, os.SEEK_END)
         while True:
             line = handle.readline()

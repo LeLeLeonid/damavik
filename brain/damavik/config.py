@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import socket
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -95,7 +96,11 @@ class Config:
         }
     )
     osquery: dict[str, Any] = field(
-        default_factory=lambda: {"enabled": False, "interval_s": 60, "pack": "osquery/packs/damavik.conf"}
+        default_factory=lambda: {
+            "enabled": False,
+            "interval_s": 60,
+            "pack": "osquery/packs/damavik.conf",
+        }
     )
     intel: dict[str, Any] = field(
         default_factory=lambda: {
@@ -227,9 +232,7 @@ def validate(data: dict[str, Any]) -> list[str]:
         errors.append("offline: must be a boolean")
     for provider, spec in _as_dict(data.get("intel")).items():
         spec = _as_dict(spec)
-        if spec.get("enabled") and spec.get("key_env") and not os.environ.get(
-            str(spec["key_env"])
-        ):
+        if spec.get("enabled") and spec.get("key_env") and not os.environ.get(str(spec["key_env"])):
             errors.append(
                 f"intel.{provider}: enabled but {spec['key_env']} is not set in the environment"
             )
@@ -265,6 +268,64 @@ def from_dict(data: dict[str, Any], *, source_path: str | None = None) -> Config
     return cfg
 
 
+#: Environment overrides, applied by :func:`load` after the file and before
+#: CLI flags.  The shipped systemd units set ``DAMAVIK_STATE_DIR`` and
+#: ``DAMAVIK_RULES_DIR``: a sandboxed brain cannot rely on the config file
+#: pointing at a writable directory (``ProtectHome=``/``ProtectSystem=strict``
+#: make ``~/.local/state`` unreachable), and the units must keep working when
+#: the file is a packaged default.
+ENV_OVERRIDES: dict[str, tuple[str, type]] = {
+    "DAMAVIK_HOST_ID": ("host_id", str),
+    "DAMAVIK_OFFLINE": ("offline", bool),
+    "DAMAVIK_RETENTION_DAYS": ("retention_days", int),
+    "DAMAVIK_STATE_DIR": ("state_dir", str),
+    "DAMAVIK_RULES_DIR": ("rules.dir", str),
+}
+
+
+def _env_value(key: str, kind: type, raw: str) -> object:
+    if kind is bool:
+        lowered = raw.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+        raise ConfigError(f"{key}={raw!r} is not a boolean")
+    if kind is int:
+        try:
+            return int(raw)
+        except ValueError as exc:
+            raise ConfigError(f"{key}={raw!r} is not an integer") from exc
+    return raw
+
+
+def apply_env(cfg: Config, environ: Mapping[str, str] | None = None) -> Config:
+    """Overlay ``DAMAVIK_*`` environment variables onto ``cfg`` in place.
+
+    Precedence is file < environment < command line: a unit's ``Environment=``
+    line beats the packaged config file, and an operator's ``--state-dir`` on
+    the command line beats both.  Unknown variables are ignored on purpose -
+    ``damavik`` must not fail to start because a shell exported something it
+    recognises only partially.
+    """
+    env = os.environ if environ is None else environ
+    for key, (dotted, kind) in ENV_OVERRIDES.items():
+        raw = env.get(key)
+        if raw is None or raw == "":
+            continue
+        value = _env_value(key, kind, raw)
+        section, _, leaf = dotted.partition(".")
+        if not leaf:
+            setattr(cfg, section, value)
+            continue
+        nested = dict(getattr(cfg, section) or {})
+        nested[leaf] = value
+        setattr(cfg, section, nested)
+    if int(cfg.retention_days) < 0:
+        raise ConfigError(f"retention_days={cfg.retention_days} must not be negative")
+    return cfg
+
+
 def load(path: str | os.PathLike[str] | None = None) -> Config:
     """Load config from ``path``, or the first default location that exists."""
     candidates = [str(path)] if path else list(DEFAULT_CONFIG_PATHS)
@@ -272,11 +333,11 @@ def load(path: str | os.PathLike[str] | None = None) -> Config:
         expanded = os.path.expanduser(candidate)
         if os.path.isfile(expanded):
             try:
-                with open(expanded, "r", encoding="utf-8") as handle:
+                with open(expanded, encoding="utf-8") as handle:
                     data = loads(handle.read()) or {}
             except (OSError, YamlError) as exc:
                 raise ConfigError(f"{expanded}: {exc}") from exc
-            return from_dict(_as_dict(data), source_path=expanded)
+            return apply_env(from_dict(_as_dict(data), source_path=expanded))
     if path:
         raise ConfigError(f"config file not found: {path}")
-    return Config()
+    return apply_env(Config())

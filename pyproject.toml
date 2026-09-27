@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 name = "damavik"
 version = "0.1.0"
 description = "Local-first host threat monitor: process, flow, DNS and package scoring with graphs, no cloud required"
-readme = "../README.md"
+readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "GPL-3.0-only" }
 authors = [{ name = "Leonidas Zervas and Damavik contributors" }]
@@ -50,15 +50,28 @@ Documentation = "https://github.com/LeLeLeonid/damavik/tree/main/docs"
 damavik = "damavik.cli:main"
 
 [tool.setuptools]
-package-dir = { "" = "." }
+# The Python package lives in brain/ so that a checkout can be run in place
+# (`cd brain && python3 -m damavik.cli …`) while `pip install .` from the repo
+# root still installs it as the `damavik` command.
+package-dir = { "" = "brain" }
 include-package-data = true
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["brain"]
 include = ["damavik*"]
 
 [tool.setuptools.package-data]
-damavik = ["dash/static/*"]
+# Shipped runtime assets travel with the wheel: a `pip install` must be able to
+# serve the dashboard and run `damavik selftest` with no checkout around.
+# `tests/test_packaging.py` fails if the vendored rules/fixture drift from
+# rules/ and tests/fixtures/.
+damavik = [
+  "dash/static/*",
+  "data/rules/*.yml",
+  # Vendored under the same relative path the CLI asks for by default
+  # (DEFAULT_FIXTURE), so no lookup special-casing is needed.
+  "data/tests/fixtures/*.jsonl",
+]
 
 [tool.pytest.ini_options]
 # Kept in the repo root workflow rather than here so that `pytest` works from
@@ -87,7 +100,11 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B011", "SIM300"]
+# B011: tests assert False on purpose.  SIM300: Yoda conditions read better in a
+# table of expected values.  E501: several tests embed verbatim fixture data
+# (/proc samples, formatted connection tables) whose value is that it is
+# byte-for-byte what the kernel prints - wrapping it would destroy the sample.
+"tests/*" = ["B011", "SIM300", "E501"]
 
 [tool.ruff.format]
 quote-style = "double"

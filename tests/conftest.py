@@ -38,7 +38,7 @@ def rule_cases() -> dict:
 
 
 @pytest.fixture()
-def config(tmp_path, rules_dir):  # noqa: ANN001
+def config(tmp_path, rules_dir):
     """A fully offline config writing into a temporary state dir."""
     from damavik.config import Config
 
@@ -46,14 +46,24 @@ def config(tmp_path, rules_dir):  # noqa: ANN001
         state_dir=str(tmp_path),
         offline=True,
         rules={"dir": rules_dir},
-        intel={"osv_mirror": {"enabled": True, "sync": "weekly",
-                              "dir": os.path.join(FIXTURES, "osv")}},
-        alerts={"path": "alerts.log", "notify": False, "cooldown_s": 0, "min_score": 45.0},
+        intel={
+            "osv_mirror": {
+                "enabled": True,
+                "sync": "weekly",
+                "dir": os.path.join(FIXTURES, "osv"),
+            }
+        },
+        alerts={
+            "path": "alerts.log",
+            "notify": False,
+            "cooldown_s": 0,
+            "min_score": 45.0,
+        },
     )
 
 
 @pytest.fixture()
-def store(tmp_path):  # noqa: ANN001
+def store(tmp_path):
     from damavik.store import Store
 
     handle = Store(str(tmp_path / "test.db"))

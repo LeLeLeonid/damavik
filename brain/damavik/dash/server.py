@@ -65,9 +65,7 @@ class Api:
             "events": events,
             "process": self.store.proc_info(int(pid)) if pid else None,
             "flows": self.store.flow_aggregates(pid=int(pid), limit=25) if pid else [],
-            "dns": [
-                event for event in self.store.events(etype="dns.query", limit=25)
-            ],
+            "dns": list(self.store.events(etype="dns.query", limit=25)),
         }
 
     def tree(self, pid: int | None = None) -> list[dict[str, Any]]:
@@ -130,8 +128,7 @@ class Api:
     def packages(self) -> dict[str, Any]:
         mirror = OsvMirror(self.config.intel.get("osv_mirror", {}).get("dir"))
         mirror.load_dir()
-        watch = PkgWatch(store=self.store, mirror=mirror,
-                         host=self.config.resolved_host_id())
+        watch = PkgWatch(store=self.store, mirror=mirror, host=self.config.resolved_host_id())
         packages = self.store.packages()
         return {
             "packages": packages,
@@ -144,8 +141,12 @@ class Api:
 
 
 def _load_static(name: str) -> tuple[bytes, str]:
-    types = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
-             ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml"}
+    types = {
+        ".html": "text/html; charset=utf-8",
+        ".js": "text/javascript; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".svg": "image/svg+xml",
+    }
     path = os.path.join(STATIC_DIR, name)
     if not os.path.isfile(path):
         return b"", "text/plain"
@@ -231,9 +232,7 @@ def make_handler(api: Api, token: str) -> type[BaseHTTPRequestHandler]:
                 self._json(200, {"roots": api.tree(int(pid) if pid else None)})
             elif path == "/api/flows":
                 pid = one("pid")
-                self._json(
-                    200, api.flows(int(pid) if pid else None, limit=number("limit", 200))
-                )
+                self._json(200, api.flows(int(pid) if pid else None, limit=number("limit", 200)))
             elif path == "/api/timeline":
                 self._json(200, {"buckets": api.timeline(hours=number("hours", 24))})
             elif path == "/api/packages":
@@ -259,8 +258,7 @@ def make_handler(api: Api, token: str) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
-def serve(config: Config, *, token: str | None = None,
-          store: Store | None = None) -> int:
+def serve(config: Config, *, token: str | None = None, store: Store | None = None) -> int:
     bind = str(config.dashboard.get("bind", "127.0.0.1"))
     port = int(config.dashboard.get("port", 8787))
     if bind not in LOOPBACK_BINDS:
@@ -270,9 +268,11 @@ def serve(config: Config, *, token: str | None = None,
             flush=True,
         )
         return 2
-    session_token = token or os.environ.get(
-        str(config.dashboard.get("token_env", "DAMAVIK_TOKEN")), ""
-    ) or secrets.token_urlsafe(16)
+    session_token = (
+        token
+        or os.environ.get(str(config.dashboard.get("token_env", "DAMAVIK_TOKEN")), "")
+        or secrets.token_urlsafe(16)
+    )
     api = Api(config, store=store)
     handler = make_handler(api, session_token)
     httpd = ThreadingHTTPServer((bind, port), handler)
@@ -291,8 +291,9 @@ def serve(config: Config, *, token: str | None = None,
     return 0
 
 
-def serve_in_thread(config: Config, *, port: int = 0,
-                    token: str = "test-token") -> tuple[Any, int, threading.Thread]:
+def serve_in_thread(
+    config: Config, *, port: int = 0, token: str = "test-token"
+) -> tuple[Any, int, threading.Thread]:
     """Start the dashboard on an ephemeral port for tests.  Returns (server, port, thread)."""
     api = Api(config)
     handler = make_handler(api, token)

@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import pytest
-
 from damavik.rules import rule_from_dict
 from damavik.score import Scorer
 
@@ -17,10 +16,24 @@ def scorer(store=None, **kwargs) -> Scorer:
 
 
 def exec_event(exe="/usr/bin/thing", sha=None, signed=True, pid=10, **extra):
-    proc = {"pid": pid, "ppid": 1, "exe": exe, "cmd": exe, "user": "alice", "signed": signed}
+    proc = {
+        "pid": pid,
+        "ppid": 1,
+        "exe": exe,
+        "cmd": exe,
+        "user": "alice",
+        "signed": signed,
+    }
     if sha:
         proc["sha256"] = sha
-    return {"ts": TS, "host": "t", "type": "proc.exec", "proc": proc, "tags": [], **extra}
+    return {
+        "ts": TS,
+        "host": "t",
+        "type": "proc.exec",
+        "proc": proc,
+        "tags": [],
+        **extra,
+    }
 
 
 def test_clean_system_binary_scores_low():
@@ -58,11 +71,17 @@ def test_allowlist_does_not_shield_malware():
 
 def test_dns_entropy_signal():
     event = {
-        "ts": TS, "host": "t", "type": "dns.query", "tags": [],
+        "ts": TS,
+        "host": "t",
+        "type": "dns.query",
+        "tags": [],
         "dns": {"q": "k7q2x9mzvb41.exfil-tunnel.example", "rtype": "A"},
     }
     benign = {
-        "ts": TS, "host": "t", "type": "dns.query", "tags": [],
+        "ts": TS,
+        "host": "t",
+        "type": "dns.query",
+        "tags": [],
         "dns": {"q": "mail.corp.example", "rtype": "A"},
     }
     assert scorer().score(event).score > scorer().score(benign).score + 20
@@ -70,9 +89,14 @@ def test_dns_entropy_signal():
 
 def test_rare_and_suspicious_ports():
     def flow(dport):
-        return {"ts": TS, "host": "t", "type": "net.flow", "tags": [],
-                "proc": {"pid": 1, "exe": "/bin/x"},
-                "net": {"proto": "tcp", "dst": "9.9.9.9", "dport": dport}}
+        return {
+            "ts": TS,
+            "host": "t",
+            "type": "net.flow",
+            "tags": [],
+            "proc": {"pid": 1, "exe": "/bin/x"},
+            "net": {"proto": "tcp", "dst": "9.9.9.9", "dport": dport},
+        }
 
     common = scorer().score(flow(443)).score
     rare = Scorer().score(flow(443)).score
@@ -81,17 +105,27 @@ def test_rare_and_suspicious_ports():
 
 
 def test_bulk_upload_signal():
-    event = {"ts": TS, "host": "t", "type": "net.flow", "tags": [],
-             "proc": {"pid": 1, "exe": "/bin/x"},
-             "net": {"proto": "tcp", "dst": "9.9.9.9", "dport": 443, "bytes_out": 9_000_000}}
+    event = {
+        "ts": TS,
+        "host": "t",
+        "type": "net.flow",
+        "tags": [],
+        "proc": {"pid": 1, "exe": "/bin/x"},
+        "net": {"proto": "tcp", "dst": "9.9.9.9", "dport": 443, "bytes_out": 9_000_000},
+    }
     assert "bulk_egress" in scorer().score(event).tags
 
 
 def test_new_destination_and_new_edge_are_recorded(store):
     def flow():
-        return {"ts": TS, "host": "t", "type": "net.flow", "tags": [],
-                "proc": {"pid": 1, "exe": "/bin/x", "sha256": "f" * 64},
-                "net": {"proto": "tcp", "dst": "8.8.8.8", "dport": 443}}
+        return {
+            "ts": TS,
+            "host": "t",
+            "type": "net.flow",
+            "tags": [],
+            "proc": {"pid": 1, "exe": "/bin/x", "sha256": "f" * 64},
+            "net": {"proto": "tcp", "dst": "8.8.8.8", "dport": 443},
+        }
 
     first = Scorer(store=store).score(flow())
     second = Scorer(store=store).score(flow())
@@ -102,9 +136,14 @@ def test_new_destination_and_new_edge_are_recorded(store):
 
 def test_rule_level_drives_the_score():
     rule = rule_from_dict(
-        {"id": "DMK-T-100", "title": "critical thing", "level": "critical",
-         "logsource": {"category": "process_creation"},
-         "selection": {"proc.exe|endswith": "thing"}, "condition": "selection"}
+        {
+            "id": "DMK-T-100",
+            "title": "critical thing",
+            "level": "critical",
+            "logsource": {"category": "process_creation"},
+            "selection": {"proc.exe|endswith": "thing"},
+            "condition": "selection",
+        }
     )
     result = scorer().score(exec_event(sha="1" * 64), [rule])
     assert result.score >= 85.0
@@ -115,9 +154,14 @@ def test_rule_level_drives_the_score():
 def test_stacked_rules_add_a_little_not_a_lot():
     rules = [
         rule_from_dict(
-            {"id": f"DMK-T-10{i}", "title": f"r{i}", "level": level,
-             "logsource": {"category": "process_creation"},
-             "selection": {"proc.exe|endswith": "thing"}, "condition": "selection"}
+            {
+                "id": f"DMK-T-10{i}",
+                "title": f"r{i}",
+                "level": level,
+                "logsource": {"category": "process_creation"},
+                "selection": {"proc.exe|endswith": "thing"},
+                "condition": "selection",
+            }
         )
         for i, level in enumerate(["high", "medium", "low", "info", "low"])
     ]
@@ -128,30 +172,62 @@ def test_stacked_rules_add_a_little_not_a_lot():
 
 
 def test_score_is_clamped_to_the_declared_range(store):
-    event = {"ts": TS, "host": "t", "type": "file.verdict", "tags": [],
-             "proc": {"pid": 1, "exe": "/tmp/x", "sha256": "9" * 64},
-             "yara": ["malware", "trojan", "stealer", "ransomware", "backdoor", "miner"]}
+    event = {
+        "ts": TS,
+        "host": "t",
+        "type": "file.verdict",
+        "tags": [],
+        "proc": {"pid": 1, "exe": "/tmp/x", "sha256": "9" * 64},
+        "yara": ["malware", "trojan", "stealer", "ransomware", "backdoor", "miner"],
+    }
     result = Scorer(store=store).score(event)
     assert 0.0 <= result.score <= 100.0
     assert result.score == 100.0
 
 
 def test_package_signals():
-    install = {"ts": TS, "host": "t", "type": "pkg.event", "tags": [],
-               "pkg": {"manager": "deb", "name": "libfoo", "version": "1.0",
-                       "cves": ["CVE-2024-0001"], "severity": "critical"},
-               "meta": {"action": "install"}}
-    quiet = {"ts": TS, "host": "t", "type": "pkg.event", "tags": [],
-             "pkg": {"manager": "deb", "name": "libbar", "version": "1.0", "cves": []},
-             "meta": {"action": "seen"}}
+    install = {
+        "ts": TS,
+        "host": "t",
+        "type": "pkg.event",
+        "tags": [],
+        "pkg": {
+            "manager": "deb",
+            "name": "libfoo",
+            "version": "1.0",
+            "cves": ["CVE-2024-0001"],
+            "severity": "critical",
+        },
+        "meta": {"action": "install"},
+    }
+    quiet = {
+        "ts": TS,
+        "host": "t",
+        "type": "pkg.event",
+        "tags": [],
+        "pkg": {"manager": "deb", "name": "libbar", "version": "1.0", "cves": []},
+        "meta": {"action": "seen"},
+    }
     assert scorer().score(install).score > scorer().score(quiet).score
 
 
 def test_risk_tool_is_not_treated_as_malware():
-    dual = {"ts": TS, "host": "t", "type": "file.verdict", "tags": [],
-            "proc": {"pid": 1, "exe": "/usr/bin/nmap"}, "yara": ["risk_tool"]}
-    bad = {"ts": TS, "host": "t", "type": "file.verdict", "tags": [],
-           "proc": {"pid": 1, "exe": "/usr/bin/nmap"}, "yara": ["malware"]}
+    dual = {
+        "ts": TS,
+        "host": "t",
+        "type": "file.verdict",
+        "tags": [],
+        "proc": {"pid": 1, "exe": "/usr/bin/nmap"},
+        "yara": ["risk_tool"],
+    }
+    bad = {
+        "ts": TS,
+        "host": "t",
+        "type": "file.verdict",
+        "tags": [],
+        "proc": {"pid": 1, "exe": "/usr/bin/nmap"},
+        "yara": ["malware"],
+    }
     assert scorer().score(dual).score < 40.0
     assert scorer().score(bad).score > 50.0
 

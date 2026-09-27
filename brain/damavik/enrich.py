@@ -18,6 +18,7 @@ Enrichment runs between normalize and score.  Two enrichers ship:
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Any
 
 from .schema import entropy_ratio, iso_to_ms, longest_label, shannon_entropy
@@ -26,38 +27,99 @@ from .schema import entropy_ratio, iso_to_ms, longest_label, shannon_entropy
 #: lower-cased; matching is done on the lower-cased basename.
 SENSITIVE_PARENTS = frozenset(
     {
-        "winword.exe", "excel.exe", "powerpnt.exe", "outlook.exe", "onenote.exe",
-        "msaccess.exe", "soffice", "soffice.bin", "libreoffice", "thunderbird.exe",
-        "chrome.exe", "firefox.exe", "msedge.exe", "brave.exe", "acrobat.exe",
-        "acrord32.exe", "evince", "okular",
+        "winword.exe",
+        "excel.exe",
+        "powerpnt.exe",
+        "outlook.exe",
+        "onenote.exe",
+        "msaccess.exe",
+        "soffice",
+        "soffice.bin",
+        "libreoffice",
+        "thunderbird.exe",
+        "chrome.exe",
+        "firefox.exe",
+        "msedge.exe",
+        "brave.exe",
+        "acrobat.exe",
+        "acrord32.exe",
+        "evince",
+        "okular",
     }
 )
 
 SHELLS = frozenset(
     {
-        "sh", "bash", "dash", "zsh", "ksh", "fish", "csh", "tcsh", "cmd.exe",
-        "powershell.exe", "pwsh", "pwsh.exe", "wscript.exe", "cscript.exe",
-        "mshta.exe", "cmd", "powershell",
+        "sh",
+        "bash",
+        "dash",
+        "zsh",
+        "ksh",
+        "fish",
+        "csh",
+        "tcsh",
+        "cmd.exe",
+        "powershell.exe",
+        "pwsh",
+        "pwsh.exe",
+        "wscript.exe",
+        "cscript.exe",
+        "mshta.exe",
+        "cmd",
+        "powershell",
     }
 )
 
 INTERPRETERS = frozenset(
     {
-        "python", "python2", "python3", "python3.11", "perl", "ruby", "lua",
-        "php", "node", "tclsh", "wish", "osascript",
+        "python",
+        "python2",
+        "python3",
+        "python3.11",
+        "perl",
+        "ruby",
+        "lua",
+        "php",
+        "node",
+        "tclsh",
+        "wish",
+        "osascript",
     }
 )
 
 #: Substrings searched in a command line.
-DOWNLOAD_TOOLS = ("curl", "wget", "nc ", "ncat", "netcat", "socat", "aria2c",
-                  "bitsadmin", "certutil", "invoke-webrequest", "| sh", "|sh",
-                  "/dev/tcp/")
+DOWNLOAD_TOOLS = (
+    "curl",
+    "wget",
+    "nc ",
+    "ncat",
+    "netcat",
+    "socat",
+    "aria2c",
+    "bitsadmin",
+    "certutil",
+    "invoke-webrequest",
+    "| sh",
+    "|sh",
+    "/dev/tcp/",
+)
 
 #: Basenames that *are* downloaders.
 DOWNLOADER_BASENAMES = frozenset(
     {
-        "curl", "wget", "nc", "ncat", "netcat", "socat", "aria2c", "bitsadmin",
-        "certutil.exe", "telnet", "telnet.exe", "ftp", "ftp.exe",
+        "curl",
+        "wget",
+        "nc",
+        "ncat",
+        "netcat",
+        "socat",
+        "aria2c",
+        "bitsadmin",
+        "certutil.exe",
+        "telnet",
+        "telnet.exe",
+        "ftp",
+        "ftp.exe",
     }
 )
 
@@ -97,7 +159,41 @@ class ContextEnricher:
             self._enrich_proc(event, proc)
         if etype == "dns.query" and isinstance(event.get("dns"), dict):
             self._enrich_dns(event["dns"], event)
+        if isinstance(event.get("net"), dict):
+            self._enrich_net(event["net"], event)
         return event
+
+    def _enrich_net(self, net: dict[str, Any], event: dict[str, Any]) -> None:
+        """Classify the destination so rules can talk about *egress*.
+
+        The sensor reports every socket it can see, loopback included, so a rule
+        that just says "six connections to one destination" fires on local IPC
+        and on the LAN: measured on an idle box, 36 connections to 127.0.0.1 and
+        26 to the host's own address were enough to alert.  A monitor that cries
+        wolf on a quiet machine is worse than no monitor.
+
+        ``is_local``  - loopback, unspecified, multicast, link-local: never leaves
+                        the host, so it can never be egress.
+        ``is_private`` - RFC1918 / CGNAT / ULA / reserved space: a LAN hop.
+                        Rules that mean "on the internet" filter these out too;
+                        a LAN destination is reported and scored either way.
+        """
+        destination = str(net.get("dst") or "")
+        if not destination:
+            return
+        try:
+            address = ipaddress.ip_address(destination)
+        except ValueError:
+            return
+        meta = event.setdefault("meta", {})
+        local = (
+            address.is_loopback
+            or address.is_unspecified
+            or address.is_multicast
+            or address.is_link_local
+        )
+        meta["is_local"] = local
+        meta["is_private"] = not local and bool(address.is_private)
 
     def _enrich_proc(self, event: dict[str, Any], proc: dict[str, Any]) -> None:
         ppid = proc.get("ppid")
@@ -120,8 +216,16 @@ class ContextEnricher:
         meta["cmd_has_download_tool"] = any(tool in cmd for tool in DOWNLOAD_TOOLS)
         meta["cmd_is_encoded"] = any(
             flag in cmd
-            for flag in ("-enc", "-encodedcommand", "-e ", "-nop", "-w hidden",
-                         "-windowstyle hidden", "frombase64string", "-noni")
+            for flag in (
+                "-enc",
+                "-encodedcommand",
+                "-e ",
+                "-nop",
+                "-w hidden",
+                "-windowstyle hidden",
+                "frombase64string",
+                "-noni",
+            )
         )
 
         pid = proc.get("pid")

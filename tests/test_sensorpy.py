@@ -9,11 +9,9 @@ import os
 import socket
 
 import pytest
-
 from damavik import sensorpy
 from damavik.schema import validate_event
 from damavik.sensorpy import ProcSensor, hash_file, parse_dns_line, read_process
-
 
 TCP_SAMPLE = """  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
    0: 0100007F:1F90 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 11111 1 0000 100 0 0 10 0
@@ -44,9 +42,9 @@ def fake_proc(monkeypatch):
     monkeypatch.setattr(
         sensorpy,
         "read_process",
-        lambda pid, do_hash=True: sensorpy.ProcessInfo(pid=pid, ppid=1, exe="/bin/browser")
-        if pid == 4242
-        else None,
+        lambda pid, do_hash=True: (
+            sensorpy.ProcessInfo(pid=pid, ppid=1, exe="/bin/browser") if pid == 4242 else None
+        ),
     )
     return files
 
@@ -58,9 +56,9 @@ def test_hex_ipv4_is_little_endian():
 
 
 def test_hex_ipv6_is_word_reversed():
-    assert sensorpy._hex_ip(
-        "0000000000000000FFFF00000100007F", socket.AF_INET6
-    ) == "::ffff:127.0.0.1"
+    assert (
+        sensorpy._hex_ip("0000000000000000FFFF00000100007F", socket.AF_INET6) == "::ffff:127.0.0.1"
+    )
 
 
 def test_hex_port():
@@ -72,8 +70,8 @@ def test_hex_port():
 def test_flows_are_parsed_and_listeners_skipped(fake_proc):
     flows = sensorpy.read_flows()
     destinations = {(flow.dst, flow.dport) for flow in flows}
-    assert ("0.0.0.0", 0) not in destinations          # the LISTEN row is dropped
-    assert ("185.110.218.45", 443) in destinations    # byte-reversed remote
+    assert ("0.0.0.0", 0) not in destinations  # the LISTEN row is dropped
+    assert ("185.110.218.45", 443) in destinations  # byte-reversed remote
     assert any(flow.state == "ESTABLISHED" for flow in flows)
 
 
@@ -165,7 +163,7 @@ def test_hash_file_refuses_oversize_files(tmp_path):
 
 
 def test_read_process_handles_a_dead_pid():
-    assert read_process(2 ** 22) is None
+    assert read_process(2**22) is None
 
 
 def test_uid_to_user_falls_back_to_the_number():
@@ -177,7 +175,10 @@ def test_uid_to_user_falls_back_to_the_number():
     "line,expected",
     [
         ("dnsmasq[1]: query[A] evil.example from 10.0.0.5", ("evil.example", "A")),
-        ("client @0x7f 10.0.0.5#53: query: evil.example IN TXT +E", ("evil.example", "TXT")),
+        (
+            "client @0x7f 10.0.0.5#53: query: evil.example IN TXT +E",
+            ("evil.example", "TXT"),
+        ),
         ("unrelated log line", None),
     ],
 )

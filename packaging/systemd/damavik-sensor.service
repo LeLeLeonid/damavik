@@ -4,23 +4,19 @@
 # Damavik sensor: emits newline-delimited JSON events on stdout and pipes them
 # into the brain.
 #
-# Two deployment shapes are supported:
-#
-#   1. Pipe (default, P0): this unit runs `damavik sensor | damavik run`. One
-#      process tree, no IPC surface, restarts cleanly. Use
-#      damavik-sensor.service together with damavik-brain@pipe (below) or just
-#      this unit alone.
-#   2. Split units (P1+): run this unit writing to a socket/fifo and the brain
-#      reading it, so the eBPF sensor can be upgraded independently.
+# Deployment shape (P0): this unit is the whole monitor.  It runs
+# `damavik sensor | damavik run`, so the sensor's JSONL goes straight into the
+# scorer with no IPC surface to secure, and one service restart restarts both
+# halves.  The split shape - sensor writing to a socket/FIFO, brain reading it,
+# `damavik serve` serving the UI - arrives with the eBPF sensor in P1, because
+# only then is there a reason to upgrade the two halves separately.
 #
 # The sensor is the part that needs privilege: reading /proc across users,
 # fanotify and eBPF all require root or CAP_SYS_ADMIN. The brain does not.
 
 [Unit]
-Description=Damavik sensor - process, flow and DNS events
+Description=Damavik monitor - process, flow and DNS events
 After=local-fs.target
-BindsTo=damavik-brain.service
-PartOf=damavik-brain.service
 
 [Service]
 Type=simple
@@ -32,9 +28,14 @@ Restart=always
 RestartSec=5s
 TimeoutStopSec=20s
 
-# A sensor restart must be visible, not silent: it is exactly what malware would
-# try to do first. The brain records the gap as a sensor.meta heartbeat break.
-WatchdogSec=120s
+# No WatchdogSec here.  systemd's watchdog requires the service to send
+# `WATCHDOG=1` on $NOTIFY_SOCKET, and neither the sensor nor the brain speaks
+# sd_notify - so arming it did not detect a hung sensor, it killed a healthy one
+# every two minutes and restarted the pipe (a self-inflicted gap in the journal
+# every 120 s).  Restart=always already covers a crash; a real liveness signal
+# means teaching the sensor sd_notify, which is P1 work alongside the eBPF
+# sensor.  Until then, staleness is visible where it belongs: the brain records
+# a sensor.meta heartbeat break when the stream stops.
 
 # --- hardening -------------------------------------------------------------
 # Deliberately weaker than the brain: the sensor legitimately reads /proc for

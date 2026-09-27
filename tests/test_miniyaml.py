@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import pytest
-
 from damavik.miniyaml import YamlError, loads
 
 
@@ -121,12 +120,12 @@ correlate:
 @pytest.mark.parametrize(
     "text",
     [
-        "a:\n\tb: 1\n",                      # tab indentation
-        "a: \"unterminated\n",               # unterminated double quote
-        "a: &anchor value\n",                # anchors unsupported
-        "a: [1, 2\n",                        # unclosed flow
-        "  a: 1\n",                          # indented document root
-        "just a bare scalar line\n",         # not a mapping
+        "a:\n\tb: 1\n",  # tab indentation
+        'a: "unterminated\n',  # unterminated double quote
+        "a: &anchor value\n",  # anchors unsupported
+        "a: [1, 2\n",  # unclosed flow
+        "  a: 1\n",  # indented document root
+        "just a bare scalar line\n",  # not a mapping
     ],
 )
 def test_rejects_outside_subset(text):

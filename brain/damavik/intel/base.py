@@ -22,8 +22,9 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 VERDICTS = ("unknown", "clean", "suspicious", "malicious")
 VERDICT_SCORE = {"unknown": 0.0, "clean": 0.0, "suspicious": 45.0, "malicious": 90.0}
@@ -63,7 +64,7 @@ class Verdict:
         }
 
     @classmethod
-    def unknown(cls, kind: str, value: str, *, source: str = "") -> "Verdict":
+    def unknown(cls, kind: str, value: str, *, source: str = "") -> Verdict:
         return cls(kind=kind, value=value, verdict="unknown", source=source or cls.__name__)
 
 

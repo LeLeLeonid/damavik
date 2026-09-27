@@ -132,8 +132,7 @@ def _numbered(parts: list[str]) -> list[tuple[int, object]]:
     return key
 
 
-def _generic_parts(version: str) -> tuple[list[tuple[int, object]], int,
-                                          list[tuple[int, object]]]:
+def _generic_parts(version: str) -> tuple[list[tuple[int, object]], int, list[tuple[int, object]]]:
     """``(release, has_no_prerelease, prerelease)``.
 
     The middle element is what makes ``1.0.0-rc1 < 1.0.0``: at equal release
@@ -159,11 +158,11 @@ def _cmp_ranked(left: list[tuple[int, object]], right: list[tuple[int, object]])
         if a is None or b is None:
             if a is None and b is None:
                 continue
-            return -1 if a is None else 1          # the shorter version sorts first
+            return -1 if a is None else 1  # the shorter version sorts first
         if a[0] != b[0]:
             return -1 if a[0] < b[0] else 1
         if a[1] != b[1]:
-            return -1 if a[1] < b[1] else 1        # type: ignore[operator]
+            return -1 if a[1] < b[1] else 1  # type: ignore[operator]
     return 0
 
 

@@ -9,7 +9,6 @@ import urllib.error
 import urllib.request
 
 import pytest
-
 from damavik.dash.server import Api, serve, serve_in_thread
 from damavik.pipeline import Pipeline
 
@@ -17,7 +16,7 @@ TOKEN = "test-token"
 
 
 @pytest.fixture()
-def server(config, attack_chain):  # noqa: ANN001
+def server(config, attack_chain):
     pipeline = Pipeline(config)
     pipeline.run_file(attack_chain)
     httpd, port, thread = serve_in_thread(config, port=0, token=TOKEN)
@@ -28,7 +27,7 @@ def server(config, attack_chain):  # noqa: ANN001
     pipeline.close()
 
 
-def get(url, token=TOKEN, raw=False):  # noqa: ANN001
+def get(url, token=TOKEN, raw=False):
     request = urllib.request.Request(url)
     if token:
         request.add_header("Authorization", f"Bearer {token}")

@@ -11,8 +11,6 @@ from __future__ import annotations
 import ast
 import os
 
-import pytest
-
 from damavik.config import Config, from_dict
 
 BRAIN = os.path.join(os.path.dirname(__file__), "..", "brain", "damavik")
@@ -32,7 +30,7 @@ def python_modules():
 
 
 def imported_names(path: str) -> set[str]:
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         tree = ast.parse(handle.read(), filename=path)
     names: set[str] = set()
     for node in ast.walk(tree):
@@ -67,7 +65,7 @@ def test_no_provider_is_enabled_by_default():
     cfg = Config()
     for name, spec in cfg.intel.items():
         if name == "osv_mirror":
-            continue          # local files, no network
+            continue  # local files, no network
         assert spec["enabled"] is False, name
 
 
@@ -100,7 +98,7 @@ def test_static_ui_has_no_external_references(repo_root):
         assert "://" not in body, f"{name} references a remote URL"
         for host in ("unpkg", "jsdelivr", "cdnjs", "googleapis", "bootstrapcdn"):
             assert host not in body.lower(), f"{name} references {host}"
-        for tag in ("<script src=", "<link rel=\"stylesheet\" href=\"http"):
+        for tag in ("<script src=", '<link rel="stylesheet" href="http'):
             if tag in body:
                 assert 'src="/' in body or 'href="/' in body, f"{name} loads a remote asset"
 
@@ -118,8 +116,20 @@ def test_purge_removes_everything(config, tmp_path):
     from damavik.cli import main
 
     fixture = os.path.join(os.path.dirname(__file__), "fixtures", "attack-chain.jsonl")
-    assert main(["--state-dir", str(tmp_path), "--rules-dir", config.rules["dir"],
-                 "run", "--file", fixture]) == 0
+    assert (
+        main(
+            [
+                "--state-dir",
+                str(tmp_path),
+                "--rules-dir",
+                config.rules["dir"],
+                "run",
+                "--file",
+                fixture,
+            ]
+        )
+        == 0
+    )
     assert os.path.exists(tmp_path / "damavik.db")
     assert main(["--state-dir", str(tmp_path), "purge", "--yes"]) == 0
     assert not os.path.exists(tmp_path / "journal.jsonl")
@@ -132,6 +142,7 @@ def test_purge_removes_everything(config, tmp_path):
 
 def test_readme_states_the_network_guarantees(repo_root):
     """The only document in the repo must still make the claims the code keeps."""
-    body = open(os.path.join(repo_root, "README.md"), encoding="utf-8").read().lower()
+    with open(os.path.join(repo_root, "README.md"), encoding="utf-8") as handle:
+        body = handle.read().lower()
     for claim in ("127.0.0.1", "offline", "no telemetry", "alert-only"):
         assert claim in body, claim

@@ -19,8 +19,9 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any
 
 from .osv import MANAGER_TO_ECOSYSTEM, OsvMirror
 from .schema import utcnow_iso
@@ -29,9 +30,31 @@ from .schema import utcnow_iso
 #: coarse prior, not a capability analysis - it only ever adds a little score
 #: and a tag, never an alert on its own.
 NETWORK_HINTS = (
-    "net", "http", "curl", "wget", "ssh", "tls", "ssl", "socket", "proxy",
-    "dns", "ldap", "samba", "nfs", "rpc", "mail", "smtp", "imap", "pop3",
-    "ftp", "telnet", "rsync", "vpn", "wireguard", "openssl", "gnutls",
+    "net",
+    "http",
+    "curl",
+    "wget",
+    "ssh",
+    "tls",
+    "ssl",
+    "socket",
+    "proxy",
+    "dns",
+    "ldap",
+    "samba",
+    "nfs",
+    "rpc",
+    "mail",
+    "smtp",
+    "imap",
+    "pop3",
+    "ftp",
+    "telnet",
+    "rsync",
+    "vpn",
+    "wireguard",
+    "openssl",
+    "gnutls",
 )
 
 DPKG_STATUS_DEFAULT = "/var/lib/dpkg/status"
@@ -120,7 +143,7 @@ def read_dpkg_status(path: str = DPKG_STATUS_DEFAULT) -> list[dict[str, str]]:
     expanded = os.path.expanduser(path)
     if not os.path.isfile(expanded):
         return []
-    with open(expanded, "r", encoding="utf-8", errors="replace") as handle:
+    with open(expanded, encoding="utf-8", errors="replace") as handle:
         return parse_dpkg_status(handle.read())
 
 
@@ -131,7 +154,9 @@ class PkgWatch:
     host: str = "localhost"
     distro: str = ""
 
-    def scan(self, packages: Iterable[dict[str, str]], *, ts: str | None = None) -> list[PackageChange]:
+    def scan(
+        self, packages: Iterable[dict[str, str]], *, ts: str | None = None
+    ) -> list[PackageChange]:
         """Diff an inventory snapshot against stored state; emit pkg events."""
         ts = ts or utcnow_iso()
         changes: list[PackageChange] = []
@@ -142,14 +167,16 @@ class PkgWatch:
             if not name:
                 continue
             is_new = self.store.upsert_package(
-                manager, name, version, ts,
-                source=pkg.get("source"), arch=pkg.get("arch"),
+                manager,
+                name,
+                version,
+                ts,
+                source=pkg.get("source"),
+                arch=pkg.get("arch"),
             )
             advisories: list[Any] = []
             if self.mirror is not None:
-                advisories = self.mirror.match_manager(
-                    manager, name, version, distro=self.distro
-                )
+                advisories = self.mirror.match_manager(manager, name, version, distro=self.distro)
             cves = sorted({adv.id for adv in advisories})
             severity = "unknown"
             if advisories:
@@ -176,7 +203,9 @@ class PkgWatch:
             )
         return changes
 
-    def diff_removed(self, packages: Iterable[dict[str, str]], *, ts: str | None = None) -> list[PackageChange]:
+    def diff_removed(
+        self, packages: Iterable[dict[str, str]], *, ts: str | None = None
+    ) -> list[PackageChange]:
         """Mark packages that vanished from the inventory."""
         ts = ts or utcnow_iso()
         present = {(p.get("manager", "deb"), p["name"]) for p in packages if p.get("name")}
@@ -217,8 +246,9 @@ class PkgWatch:
                         "cves": sorted({adv.id for adv in hits}),
                         "severity": max(
                             (adv.severity for adv in hits),
-                            key=lambda value: {"critical": 4, "high": 3, "medium": 2,
-                                               "low": 1}.get(value, 0),
+                            key=lambda value: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(
+                                value, 0
+                            ),
                         ),
                         "ecosystem": MANAGER_TO_ECOSYSTEM.get(row["manager"], row["manager"]),
                     }

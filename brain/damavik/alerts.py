@@ -37,7 +37,7 @@ def level_for_score(score: float) -> str:
 
 
 def _alert_id(dedup: str, ts: str) -> str:
-    return "a-" + hashlib.sha256(f"{dedup}|{ts}".encode("utf-8")).hexdigest()[:12]
+    return "a-" + hashlib.sha256(f"{dedup}|{ts}".encode()).hexdigest()[:12]
 
 
 @dataclass
@@ -78,7 +78,9 @@ class AlertSink:
         if parent:
             os.makedirs(parent, exist_ok=True)
         if self._fh is None:
-            self._fh = open(expanded, "a", encoding="utf-8")
+            # Deliberately not a context manager: the handle is opened once per
+            # process and reused for every alert, and `close()` owns it.
+            self._fh = open(expanded, "a", encoding="utf-8")  # noqa: SIM115
         self._fh.write(json.dumps(alert, sort_keys=True) + "\n")
         self._fh.flush()
 
@@ -101,8 +103,9 @@ class AlertSink:
 
 
 class AlertEngine:
-    def __init__(self, sink: AlertSink, *, cooldown_s: float | None = None,
-                 min_score: float | None = None) -> None:
+    def __init__(
+        self, sink: AlertSink, *, cooldown_s: float | None = None, min_score: float | None = None
+    ) -> None:
         self.sink = sink
         self.cooldown_s = sink.cooldown_s if cooldown_s is None else cooldown_s
         self.min_score = sink.min_score if min_score is None else min_score
@@ -111,8 +114,10 @@ class AlertEngine:
     def build(self, event: dict[str, Any], score: Any, fired: list[Any]) -> dict[str, Any] | None:
         ts = event.get("ts") or utcnow_iso()
         if fired:
-            rule = max(fired, key=lambda r: {"info": 0, "low": 1, "medium": 2,
-                                             "high": 3, "critical": 4}[r.level])
+            rule = max(
+                fired,
+                key=lambda r: {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}[r.level],
+            )
             level = rule.level if rule.level in LEVELS else level_for_score(score.score)
             title = rule.title
             # A correlating rule (beacon, DNS burst) must collapse on its
@@ -129,7 +134,7 @@ class AlertEngine:
             dedup = f"generic|{self._primary_ioc(event)}"
             explain_parts = []
         explain_parts.extend(score.reasons)
-        alert = {
+        return {
             "id": _alert_id(dedup, ts),
             "ts": ts,
             "title": title,
@@ -142,9 +147,10 @@ class AlertEngine:
             "status": "open",
             "dedup": dedup,
         }
-        return alert
 
-    def consider(self, event: dict[str, Any], score: Any, fired: list[Any]) -> dict[str, Any] | None:
+    def consider(
+        self, event: dict[str, Any], score: Any, fired: list[Any]
+    ) -> dict[str, Any] | None:
         """Build an alert, applying dedup/cooldown.  Returns None when suppressed."""
         alert = self.build(event, score, fired)
         if alert is None:
@@ -181,8 +187,13 @@ class AlertEngine:
         net = event.get("net") or {}
         dns = event.get("dns") or {}
         pkg = event.get("pkg") or {}
-        for value in (proc.get("sha256"), net.get("dst"), dns.get("q"), pkg.get("name"),
-                      proc.get("exe")):
+        for value in (
+            proc.get("sha256"),
+            net.get("dst"),
+            dns.get("q"),
+            pkg.get("name"),
+            proc.get("exe"),
+        ):
             if value:
                 return str(value)
         return event.get("type", "unknown")

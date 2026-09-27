@@ -29,16 +29,22 @@ costs a dict lookup plus a few cheap comparisons.
 
 from __future__ import annotations
 
+import bisect
 import os
 import re
 import time
-from collections import deque
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable
+from typing import Any
 
 from .miniyaml import YamlError, loads
+from .schema import iso_to_ms
 
 VALID_LEVELS = ("info", "low", "medium", "high", "critical")
+
+#: Sorts after any event id, so a bisect can address "every entry at this
+#: timestamp" without knowing the ids.
+MAX_SORT_KEY = "\U0010ffff"
 VALID_STATUS = ("stable", "test", "experimental", "deprecated")
 
 #: Maps a rule's logsource.category onto the event type(s) it can fire on.
@@ -81,6 +87,22 @@ def get_field(event: dict[str, Any], path: str) -> Any:
         else:
             return None
     return node
+
+
+def event_clock(event: dict[str, Any]) -> float:
+    """Epoch seconds for an event, for use as the correlation clock.
+
+    The event's own timestamp is authoritative - see :meth:`RuleSet.evaluate`.
+    An event with a missing or unparseable ``ts`` falls back to the wall clock,
+    because refusing to evaluate it would be worse than a slightly wrong window.
+    """
+    ts = event.get("ts")
+    if isinstance(ts, str) and ts:
+        try:
+            return iso_to_ms(ts) / 1000.0
+        except ValueError:
+            return time.time()
+    return time.time()
 
 
 def _as_text(value: Any) -> str:
@@ -146,7 +168,6 @@ def _matcher(path: str, modifiers: list[str], values: list[Any]) -> Matcher:
 
     elif mode in ("gt", "gte", "lt", "lte"):
         needles = [float(v) for v in values]
-        op = mode
 
         def test(text: str, needle: Any) -> bool:  # pragma: no cover - numeric path below
             return False
@@ -203,9 +224,7 @@ def _matcher(path: str, modifiers: list[str], values: list[Any]) -> Matcher:
             return all(
                 any(_one(candidate, needle) for candidate in candidates) for needle in needles
             )
-        return any(
-            _one(candidate, needle) for candidate in candidates for needle in needles
-        )
+        return any(_one(candidate, needle) for candidate in candidates for needle in needles)
 
     return predicate
 
@@ -264,7 +283,16 @@ def _parse_condition(expr: str) -> Any:
             pos += 1
             right = parse_and()
             left = node
-            node = lambda ev, sets, l=left, r=right: bool(l(ev, sets)) or bool(r(ev, sets))
+
+            def either(
+                ev: dict[str, Any],
+                sets: dict[str, list[Clause]],
+                left: Any = left,
+                right: Any = right,
+            ) -> bool:
+                return bool(left(ev, sets)) or bool(right(ev, sets))
+
+            node = either
         return node
 
     def parse_and() -> Any:
@@ -274,7 +302,16 @@ def _parse_condition(expr: str) -> Any:
             pos += 1
             right = parse_not()
             left = node
-            node = lambda ev, sets, l=left, r=right: bool(l(ev, sets)) and bool(r(ev, sets))
+
+            def both(
+                ev: dict[str, Any],
+                sets: dict[str, list[Clause]],
+                left: Any = left,
+                right: Any = right,
+            ) -> bool:
+                return bool(left(ev, sets)) and bool(right(ev, sets))
+
+            node = both
         return node
 
     def parse_not() -> Any:
@@ -282,7 +319,13 @@ def _parse_condition(expr: str) -> Any:
         if pos < len(tokens) and tokens[pos] == "not":
             pos += 1
             inner = parse_not()
-            return lambda ev, sets, i=inner: not bool(i(ev, sets))
+
+            def negated(
+                ev: dict[str, Any], sets: dict[str, list[Clause]], inner: Any = inner
+            ) -> bool:
+                return not bool(inner(ev, sets))
+
+            return negated
         return parse_atom()
 
     def parse_atom() -> Any:
@@ -363,8 +406,21 @@ def rule_from_dict(data: dict[str, Any], *, source: str = "") -> Rule:
 
     selections: dict[str, list[Clause]] = {}
     for key, value in data.items():
-        if key in ("title", "id", "status", "level", "description", "logsource", "condition",
-                   "tags", "correlate", "references", "author", "date", "falsepositives"):
+        if key in (
+            "title",
+            "id",
+            "status",
+            "level",
+            "description",
+            "logsource",
+            "condition",
+            "tags",
+            "correlate",
+            "references",
+            "author",
+            "date",
+            "falsepositives",
+        ):
             continue
         if not isinstance(value, dict):
             raise RuleError(f"rule {rule_id}: '{key}' must be a mapping of field conditions")
@@ -379,8 +435,7 @@ def rule_from_dict(data: dict[str, Any], *, source: str = "") -> Rule:
         raise RuleError(f"rule {rule_id}: unknown logsource.category {category!r}")
 
     referenced = {
-        word for word in re.findall(r"\w+", condition)
-        if word not in ("and", "or", "not")
+        word for word in re.findall(r"\w+", condition) if word not in ("and", "or", "not")
     }
     unknown = sorted(referenced - set(selections))
     if unknown:
@@ -418,7 +473,7 @@ def rule_from_dict(data: dict[str, Any], *, source: str = "") -> Rule:
 
 
 def load_rule_file(path: str) -> Rule:
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         text = handle.read()
     try:
         data = loads(text)
@@ -440,7 +495,15 @@ class RuleSet:
                     self.by_type.setdefault(etype, []).append(rule)
             else:
                 self.universal.append(rule)
-        self._windows: dict[str, deque[tuple[float, str]]] = {}
+        self._correlate_specs: dict[str, dict[str, Any]] = {
+            rule.rule_id: rule.correlate for rule in self.rules if rule.correlate
+        }
+        #: Correlation windows are keyed by (rule, group value), and a
+        #: long-lived monitor sees a new group for every hostname and every
+        #: destination it observes.  Past this many live windows, expired ones
+        #: are dropped; nothing that can still fire is ever discarded.
+        self.WINDOW_LIMIT = 10000
+        self._windows: dict[str, list[tuple[float, str]]] = {}
         self._fired: set[str] = set()
 
     def __len__(self) -> int:
@@ -454,8 +517,18 @@ class RuleSet:
         return self.by_type.get(etype, []) + self.universal
 
     def evaluate(self, event: dict[str, Any], *, now: float | None = None) -> list[Rule]:
-        """Return every rule that fires for this event (correlation-aware)."""
-        now = time.time() if now is None else now
+        """Return every rule that fires for this event (correlation-aware).
+
+        ``now`` defaults to the event's own ``ts``, not the wall clock.  A
+        monitor is fed from two very different sources: a live sensor, where the
+        two are within milliseconds, and a *replay* (demo, benchmark, forensic
+        reload, every test), where a capture spanning hours is processed in
+        microseconds.  On the wall clock, correlation windows degenerate on the
+        second and inflate on every replay: six connections to a destination two
+        minutes apart in the capture would fire, and two genuinely separate
+        bursts would merge.  Callers may still pass ``now`` explicitly.
+        """
+        now = event_clock(event) if now is None else now
         fired: list[Rule] = []
         for rule in self.candidates_for(event):
             if not rule.matches(event):
@@ -475,15 +548,53 @@ class RuleSet:
         window = float(spec["window_s"])
         threshold = int(spec["min_count"])
         bucket_key = f"{rule.rule_id}|{key}"
-        bucket = self._windows.setdefault(bucket_key, deque())
-        bucket.append((now, event.get("id", "")))
+        if len(self._windows) >= self.WINDOW_LIMIT:
+            self._bound_windows()
+        # Sorted insertion, not append: a sensor may emit an event with an older
+        # timestamp than the previous one (clock adjustment, out-of-order pipe),
+        # and appending it would put the oldest entry in the middle - where the
+        # eviction loop below would never reach it, inflating the count.
+        bucket = self._windows.setdefault(bucket_key, [])
+        bisect.insort(bucket, (now, str(event.get("id", ""))))
+        # The window is [now - window_s, now]: entries newer than the event
+        # being evaluated do not belong to its window, so an out-of-order
+        # arrival cannot count a neighbour that has not happened yet.
         cutoff = now - window
-        while bucket and bucket[0][0] < cutoff:
-            bucket.popleft()
-        return len(bucket) >= threshold
+        start = bisect.bisect_left(bucket, (cutoff, ""))
+        end = bisect.bisect_right(bucket, (now, MAX_SORT_KEY))
+        if start:
+            del bucket[:start]
+        return (end - start) >= threshold
+
+    def _bound_windows(self) -> None:
+        """Keep the correlation map bounded.
+
+        A long-lived brain sees one bucket per (rule, group) - every hostname
+        looked up, every destination connected to - so the map has to be pruned
+        or it is a leak.  Expired buckets go first; if that is not enough (a
+        host talking to a hundred thousand destinations inside one window), the
+        half with the oldest activity is dropped.  Losing a window can only lose
+        a detection in that pathological case, never invent one.
+        """
+        for bucket_key, entries in list(self._windows.items()):
+            spec = self._correlate_specs.get(bucket_key.split("|", 1)[0])
+            if not entries or not spec:
+                self._windows.pop(bucket_key, None)
+                continue
+            cutoff = entries[-1][0] - float(spec["window_s"])
+            del entries[: bisect.bisect_left(entries, (cutoff, ""))]
+            if not entries:
+                self._windows.pop(bucket_key, None)
+        overflow = len(self._windows) - self.WINDOW_LIMIT // 2
+        if overflow > 0:
+            oldest = sorted(self._windows.items(), key=lambda item: item[1][-1][0])
+            for bucket_key, _ in oldest[:overflow]:
+                self._windows.pop(bucket_key, None)
 
 
-def load_rules_dir(directory: str, *, include_experimental: bool = True) -> tuple[RuleSet, list[str]]:
+def load_rules_dir(
+    directory: str, *, include_experimental: bool = True
+) -> tuple[RuleSet, list[str]]:
     """Load every ``*.yml`` / ``*.yaml`` rule from a directory."""
     errors: list[str] = []
     rules: list[Rule] = []

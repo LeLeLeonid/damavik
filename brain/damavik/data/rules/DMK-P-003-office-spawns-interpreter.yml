@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Office application spawns a script interpreter
+id: DMK-P-003
+status: stable
+level: high
+description: >-
+  A document reader or browser starting python/perl/ruby/node is a macro or
+  plugin executing attacker-supplied script.
+tags:
+  - attack.execution
+  - attack.t1059.006
+logsource:
+  category: process_creation
+selection:
+  meta.parent_is_sensitive: true
+  meta.child_is_interpreter: true
+condition: selection

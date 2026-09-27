@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Newly installed network-capable package
+id: DMK-V-002
+status: experimental
+level: low
+description: >-
+  A package that was not installed before and whose name or description
+  suggests network capability.  Deliberately low severity: this is a lead, not
+  a verdict.
+tags:
+  - supply_chain
+logsource:
+  category: package
+selection:
+  meta.action: install
+  meta.net_capable: true
+condition: selection

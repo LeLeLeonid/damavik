@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import time
 
+from damavik.schema import utcnow_iso
 from damavik.store import Store
 
 TS = "2026-09-10T10:00:00.000Z"
@@ -61,20 +62,32 @@ def test_orphan_process_becomes_a_root(store):
 
 
 def test_proc_info_and_first_exec(store):
-    store.insert_event(ev(ts="2026-09-10T10:00:00.000Z",
-                          proc={"pid": 9, "ppid": 1, "exe": "/bin/a", "cmd": "a"}))
-    store.insert_event(ev(ts="2026-09-10T10:00:05.000Z",
-                          proc={"pid": 9, "ppid": 1, "exe": "/bin/a", "cmd": "a again"}))
+    store.insert_event(
+        ev(
+            ts="2026-09-10T10:00:00.000Z",
+            proc={"pid": 9, "ppid": 1, "exe": "/bin/a", "cmd": "a"},
+        )
+    )
+    store.insert_event(
+        ev(
+            ts="2026-09-10T10:00:05.000Z",
+            proc={"pid": 9, "ppid": 1, "exe": "/bin/a", "cmd": "a again"},
+        )
+    )
     info = store.proc_info(9)
-    assert info["cmd"] == "a again"          # newest wins
+    assert info["cmd"] == "a again"  # newest wins
     assert store.first_exec_ts_ms(9) < store.first_exec_ts_ms(9) + 1
     assert store.proc_info(12345) is None
 
 
 def test_hash_history_for_a_path(store):
     store.insert_event(ev(proc={"pid": 1, "exe": "/usr/bin/curl", "sha256": "a" * 64}))
-    store.insert_event(ev(ts="2026-09-10T10:00:01.000Z",
-                          proc={"pid": 2, "exe": "/usr/bin/curl", "sha256": "b" * 64}))
+    store.insert_event(
+        ev(
+            ts="2026-09-10T10:00:01.000Z",
+            proc={"pid": 2, "exe": "/usr/bin/curl", "sha256": "b" * 64},
+        )
+    )
     assert set(store.hashes_for_exe("/usr/bin/curl")) == {"a" * 64, "b" * 64}
     assert store.hashes_for_exe("/usr/bin/absent") == []
 
@@ -82,10 +95,18 @@ def test_hash_history_for_a_path(store):
 def test_flow_aggregation_accumulates(store):
     for index in range(3):
         store.insert_event(
-            ev("net.flow", ts=f"2026-09-10T10:00:0{index}.000Z",
-               proc={"pid": 42, "exe": "/bin/x"},
-               net={"proto": "tcp", "dst": "1.2.3.4", "dport": 443,
-                    "bytes_out": 100, "bytes_in": 50})
+            ev(
+                "net.flow",
+                ts=f"2026-09-10T10:00:0{index}.000Z",
+                proc={"pid": 42, "exe": "/bin/x"},
+                net={
+                    "proto": "tcp",
+                    "dst": "1.2.3.4",
+                    "dport": 443,
+                    "bytes_out": 100,
+                    "bytes_in": 50,
+                },
+            )
         )
     rows = store.flow_aggregates(pid=42)
     assert len(rows) == 1
@@ -96,8 +117,11 @@ def test_flow_aggregation_accumulates(store):
 def test_unattributed_flows_share_one_row(store):
     for index in range(2):
         store.insert_event(
-            ev("net.flow", ts=f"2026-09-10T10:00:0{index}.000Z",
-               net={"proto": "tcp", "dst": "9.9.9.9", "dport": 53, "bytes_out": 10})
+            ev(
+                "net.flow",
+                ts=f"2026-09-10T10:00:0{index}.000Z",
+                net={"proto": "tcp", "dst": "9.9.9.9", "dport": 53, "bytes_out": 10},
+            )
         )
     rows = store.flow_aggregates()
     assert len(rows) == 1
@@ -116,30 +140,49 @@ def test_first_seen_counts(store):
 
 
 def test_package_lifecycle(store):
-    assert store.upsert_package("deb", "libfoo", "1.0", TS) is True       # new
-    assert store.upsert_package("deb", "libfoo", "1.1", TS) is False      # update
+    assert store.upsert_package("deb", "libfoo", "1.0", TS) is True  # new
+    assert store.upsert_package("deb", "libfoo", "1.1", TS) is False  # update
     assert store.mark_removed("deb", "libfoo", TS) is True
-    assert store.mark_removed("deb", "libfoo", TS) is False               # already gone
-    assert store.upsert_package("deb", "libfoo", "1.2", TS) is True       # back == new
+    assert store.mark_removed("deb", "libfoo", TS) is False  # already gone
+    assert store.upsert_package("deb", "libfoo", "1.2", TS) is True  # back == new
     assert store.packages(manager="deb")[0]["removed"] == 0
 
 
 def test_cve_rows(store):
-    store.upsert_cve({"id": "CVE-2024-0001", "ecosystem": "Debian:12", "package": "libfoo",
-                      "introduced": "0", "fixed": "1.2.4", "severity": "high",
-                      "summary": "bad", "modified": TS})
+    store.upsert_cve(
+        {
+            "id": "CVE-2024-0001",
+            "ecosystem": "Debian:12",
+            "package": "libfoo",
+            "introduced": "0",
+            "fixed": "1.2.4",
+            "severity": "high",
+            "summary": "bad",
+            "modified": TS,
+        }
+    )
     rows = store.cves_for("Debian:12", "libfoo")
     assert rows[0]["fixed"] == "1.2.4"
     assert store.cves_for("Debian:12", "libbar") == []
 
 
 def test_intel_cache_expires(store):
-    store.cache_put("bazaar", "sha256:abc", {"verdict": "malicious", "score": 90.0,
-                                             "source": "bazaar", "refs": ["x"]}, 3600, TS)
+    store.cache_put(
+        "bazaar",
+        "sha256:abc",
+        {"verdict": "malicious", "score": 90.0, "source": "bazaar", "refs": ["x"]},
+        3600,
+        TS,
+    )
     hit = store.cache_get("bazaar", "sha256:abc")
     assert hit["verdict"] == "malicious" and hit["cached"] is True
-    store.cache_put("bazaar", "sha256:old", {"verdict": "clean", "score": 0.0,
-                                             "source": "bazaar", "refs": []}, -10, TS)
+    store.cache_put(
+        "bazaar",
+        "sha256:old",
+        {"verdict": "clean", "score": 0.0, "source": "bazaar", "refs": []},
+        -10,
+        TS,
+    )
     assert store.cache_get("bazaar", "sha256:old") is None
 
 
@@ -154,9 +197,11 @@ def test_timeline_buckets(store):
 
 
 def test_retention_removes_old_rows_only(store):
+    """The "new" row has to be new in wall-clock terms, not just newer than the
+    old one: this is the rename-day bug that made the whole suite rot."""
     old = "2020-01-01T00:00:00.000Z"
     store.insert_event(ev(ts=old, proc={"pid": 1, "exe": "/bin/old"}))
-    store.insert_event(ev(proc={"pid": 2, "exe": "/bin/new"}))
+    store.insert_event(ev(ts=utcnow_iso(), proc={"pid": 2, "exe": "/bin/new"}))
     store.insert_alert({"id": "a-1", "ts": old, "title": "old", "level": "high", "score": 90.0})
     removed = store.apply_retention(7)
     assert removed["events"] == 1 and removed["alerts"] == 1
@@ -181,8 +226,16 @@ def test_purge_wipes_everything(store):
 def test_summary_shape(store):
     store.insert_event(ev(proc={"pid": 1, "exe": "/bin/x"}, score=33.0))
     summary = store.summary()
-    for key in ("events", "alerts", "packages", "cves", "first_seen_keys", "top_score",
-                "db_bytes", "schema_version"):
+    for key in (
+        "events",
+        "alerts",
+        "packages",
+        "cves",
+        "first_seen_keys",
+        "top_score",
+        "db_bytes",
+        "schema_version",
+    ):
         assert key in summary, key
     assert summary["top_score"] == 33.0
 

@@ -18,8 +18,9 @@ from __future__ import annotations
 import json
 import os
 import zipfile
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any
 
 from .versions import compare
 
@@ -42,13 +43,12 @@ class Range:
     last_affected: str | None = None
 
     def matches(self, version: str, ecosystem: str) -> bool:
-        if self.introduced not in (None, "", "0"):
-            if compare(version, self.introduced, ecosystem) < 0:
-                return False
+        if self.introduced not in (None, "", "0") and (
+            compare(version, self.introduced, ecosystem) < 0
+        ):
+            return False
         if self.fixed:
-            if compare(version, self.fixed, ecosystem) >= 0:
-                return False
-            return True
+            return compare(version, self.fixed, ecosystem) < 0
         if self.last_affected:
             return compare(version, self.last_affected, ecosystem) <= 0
         # introduced-only ranges affect everything from that version onwards.
@@ -202,7 +202,7 @@ class OsvMirror:
             path = os.path.join(target, name)
             if name.endswith(".json") and os.path.isfile(path):
                 try:
-                    with open(path, "r", encoding="utf-8") as handle:
+                    with open(path, encoding="utf-8") as handle:
                         record = json.load(handle)
                 except (OSError, json.JSONDecodeError):
                     continue
@@ -251,8 +251,9 @@ class OsvMirror:
                 merged.extend(adv for adv in advisories if adv.affects(version))
         return merged
 
-    def match_manager(self, manager: str, package: str, version: str,
-                      *, distro: str = "") -> list[Advisory]:
+    def match_manager(
+        self, manager: str, package: str, version: str, *, distro: str = ""
+    ) -> list[Advisory]:
         base = MANAGER_TO_ECOSYSTEM.get(manager, manager.capitalize())
         ecosystem = f"{base}:{distro}" if distro else base
         return self.match(ecosystem, package, version)

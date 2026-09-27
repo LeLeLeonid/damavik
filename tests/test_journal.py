@@ -32,7 +32,7 @@ def test_editing_a_record_is_detected(tmp_path):
         journal.append({"kind": "alert", "level": "high"})
     lines = path.read_text(encoding="utf-8").splitlines()
     tampered = json.loads(lines[0])
-    tampered["rec"]["level"] = "info"          # attacker downgrades the alert
+    tampered["rec"]["level"] = "info"  # attacker downgrades the alert
     lines[0] = json.dumps(tampered, sort_keys=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -48,7 +48,7 @@ def test_deleting_a_record_is_detected(tmp_path):
         for index in range(4):
             journal.append({"n": index})
     lines = path.read_text(encoding="utf-8").splitlines()
-    del lines[1]                                # attacker hides one event
+    del lines[1]  # attacker hides one event
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     report = verify(Journal(str(path)))

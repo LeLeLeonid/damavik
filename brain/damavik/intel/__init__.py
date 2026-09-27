@@ -36,7 +36,7 @@ def providers_for(config: object, store: object | None = None) -> list[Provider]
         out.append(MalwareBazaar(store=store, offline=offline, max_bytes=max_bytes))
     if "urlhaus" in enabled:
         out.append(URLhaus(store=store, offline=offline, max_bytes=max_bytes))
-    for name, cls in (("abuseipdb", None), ("otx", None), ("vt", None)):
+    for name in ("abuseipdb", "otx", "vt"):
         if name in enabled:  # keyed providers land in P5
             key_env = str(enabled[name].get("key_env", ""))
             if key_env and not os.environ.get(key_env):

@@ -4,11 +4,26 @@
 
 from __future__ import annotations
 
+import json
 import os
+import time
 
 import pytest
+from damavik.rules import (
+    RuleSet,
+    event_clock,
+    get_field,
+    load_rule_file,
+    load_rules_dir,
+    rule_from_dict,
+)
 
-from damavik.rules import RuleSet, get_field, load_rule_file, load_rules_dir, rule_from_dict
+
+def shipped_rule_cases() -> list[str]:
+    """Rule ids that carry a true-positive and a false-positive fixture."""
+    path = os.path.join(os.path.dirname(__file__), "fixtures", "rule_cases.json")
+    with open(path, encoding="utf-8") as handle:
+        return sorted(json.load(handle))
 
 
 def fired_ids(ruleset: RuleSet, events: list[dict], now: float = 1_000_000.0) -> set[str]:
@@ -54,9 +69,7 @@ def test_every_shipped_rule_has_fixtures(shipped, rule_cases):
     assert not missing, f"rules without TP/FP fixtures: {sorted(missing)}"
 
 
-@pytest.mark.parametrize("rule_id", sorted(__import__("json").load(
-    open(os.path.join(os.path.dirname(__file__), "fixtures", "rule_cases.json"),
-         encoding="utf-8"))))
+@pytest.mark.parametrize("rule_id", shipped_rule_cases())
 def test_true_positive_fires(rule_id, rules_dir, rule_cases):
     path = _rule_path(rules_dir, rule_id)
     ruleset = RuleSet([load_rule_file(path)])
@@ -64,9 +77,7 @@ def test_true_positive_fires(rule_id, rules_dir, rule_cases):
     assert rule_id in hits, f"{rule_id} did not fire on its true positive"
 
 
-@pytest.mark.parametrize("rule_id", sorted(__import__("json").load(
-    open(os.path.join(os.path.dirname(__file__), "fixtures", "rule_cases.json"),
-         encoding="utf-8"))))
+@pytest.mark.parametrize("rule_id", shipped_rule_cases())
 def test_false_positive_does_not_fire(rule_id, rules_dir, rule_cases):
     path = _rule_path(rules_dir, rule_id)
     ruleset = RuleSet([load_rule_file(path)])
@@ -142,8 +153,16 @@ def test_type_bucketing_skips_irrelevant_events():
         ({"proc.signed": False}, {"proc": {"signed": True}}, False),
         ({"net.dport": [443, 8443]}, {"net": {"dport": 8443}}, True),
         ({"yara|contains": "mal"}, {"yara": ["packer", "malware_x"]}, True),
-        ({"proc.cmd|contains|all": ["curl", "-o"]}, {"proc": {"cmd": "curl -o x"}}, True),
-        ({"proc.cmd|contains|all": ["curl", "wget"]}, {"proc": {"cmd": "curl -o x"}}, False),
+        (
+            {"proc.cmd|contains|all": ["curl", "-o"]},
+            {"proc": {"cmd": "curl -o x"}},
+            True,
+        ),
+        (
+            {"proc.cmd|contains|all": ["curl", "wget"]},
+            {"proc": {"cmd": "curl -o x"}},
+            False,
+        ),
     ],
 )
 def test_field_modifiers(clause, event, expected):
@@ -164,7 +183,9 @@ def test_unknown_modifier_is_rejected():
     with pytest.raises(Exception, match="modifier"):
         rule_from_dict(
             {
-                "id": "DMK-T-002", "title": "t", "level": "low",
+                "id": "DMK-T-002",
+                "title": "t",
+                "level": "low",
                 "logsource": {"category": "any"},
                 "selection": {"proc.cmd|base64offset": "x"},
                 "condition": "selection",
@@ -178,11 +199,31 @@ def test_unknown_modifier_is_rejected():
         ({"id": "", "title": "t", "condition": "s", "s": {"a": 1}}, "missing 'id'"),
         ({"id": "X", "title": "", "condition": "s", "s": {"a": 1}}, "missing 'title'"),
         ({"id": "X", "title": "t", "s": {"a": 1}}, "missing 'condition'"),
-        ({"id": "X", "title": "t", "level": "panic", "condition": "s", "s": {"a": 1}}, "level"),
-        ({"id": "X", "title": "t", "condition": "nope", "s": {"a": 1}}, "unknown selection"),
+        (
+            {
+                "id": "X",
+                "title": "t",
+                "level": "panic",
+                "condition": "s",
+                "s": {"a": 1},
+            },
+            "level",
+        ),
+        (
+            {"id": "X", "title": "t", "condition": "nope", "s": {"a": 1}},
+            "unknown selection",
+        ),
         ({"id": "X", "title": "t", "condition": "s and", "s": {"a": 1}}, "condition"),
-        ({"id": "X", "title": "t", "condition": "s", "s": {"a": 1},
-          "logsource": {"category": "telepathy"}}, "logsource"),
+        (
+            {
+                "id": "X",
+                "title": "t",
+                "condition": "s",
+                "s": {"a": 1},
+                "logsource": {"category": "telepathy"},
+            },
+            "logsource",
+        ),
         ({"id": "X", "title": "t", "condition": "s", "s": {}}, "empty"),
     ],
 )
@@ -201,7 +242,9 @@ def test_condition_needs_balanced_parens():
 def test_correlation_fires_only_at_threshold():
     rule = rule_from_dict(
         {
-            "id": "DMK-T-003", "title": "t", "level": "medium",
+            "id": "DMK-T-003",
+            "title": "t",
+            "level": "medium",
             "logsource": {"category": "network_connect"},
             "selection": {"net.dst|exists": True},
             "condition": "selection",
@@ -218,7 +261,9 @@ def test_correlation_fires_only_at_threshold():
 def test_correlation_window_expires():
     rule = rule_from_dict(
         {
-            "id": "DMK-T-004", "title": "t", "level": "medium",
+            "id": "DMK-T-004",
+            "title": "t",
+            "level": "medium",
             "logsource": {"category": "network_connect"},
             "selection": {"net.dst|exists": True},
             "condition": "selection",
@@ -231,10 +276,119 @@ def test_correlation_window_expires():
     assert fired_ids(ruleset, [event], now=1000.0) == set()
 
 
+def _two_in_a_minute() -> RuleSet:
+    return RuleSet(
+        [
+            rule_from_dict(
+                {
+                    "id": "DMK-T-900",
+                    "title": "t",
+                    "level": "medium",
+                    "logsource": {"category": "network_connect"},
+                    "selection": {"net.dst|exists": True},
+                    "condition": "selection",
+                    "correlate": {
+                        "group_by": "net.dst",
+                        "window_s": 60,
+                        "min_count": 2,
+                    },
+                }
+            )
+        ]
+    )
+
+
+def test_correlation_follows_the_event_clock_not_the_wall_clock():
+    """A replayed capture must correlate on its own timeline.
+
+    Both events here are evaluated microseconds apart, but the capture says they
+    are an hour apart, so the 60-second window must not merge them.  With a
+    wall-clock window the second event always fired, whatever the capture said -
+    which made every replay, demo and test meaningless as a timeline.
+    """
+    ruleset = _two_in_a_minute()
+    first = {
+        "type": "net.flow",
+        "ts": "2026-01-01T00:00:00.000Z",
+        "net": {"dst": "1.1.1.1"},
+    }
+    second = {
+        "type": "net.flow",
+        "ts": "2026-01-01T01:00:00.000Z",
+        "net": {"dst": "1.1.1.1"},
+    }
+    assert [rule.rule_id for rule in ruleset.evaluate(first)] == []
+    assert ruleset.evaluate(second) == []
+
+
+def test_correlation_still_fires_inside_the_event_window():
+    ruleset = _two_in_a_minute()
+    first = {
+        "type": "net.flow",
+        "ts": "2026-01-01T00:00:00.000Z",
+        "net": {"dst": "1.1.1.1"},
+    }
+    second = {
+        "type": "net.flow",
+        "ts": "2026-01-01T00:00:30.000Z",
+        "net": {"dst": "1.1.1.1"},
+    }
+    ruleset.evaluate(first)
+    assert [rule.rule_id for rule in ruleset.evaluate(second)] == ["DMK-T-900"]
+
+
+def test_correlation_window_survives_out_of_order_arrival():
+    """A sensor may hand us an older timestamp after a newer one; that must not
+    leave a stale entry stranded where eviction cannot reach it."""
+    ruleset = _two_in_a_minute()
+    newer = {
+        "type": "net.flow",
+        "ts": "2026-01-01T00:05:00.000Z",
+        "net": {"dst": "1.1.1.1"},
+    }
+    older = {
+        "type": "net.flow",
+        "ts": "2026-01-01T00:00:00.000Z",
+        "net": {"dst": "1.1.1.1"},
+    }
+    assert ruleset.evaluate(newer) == []
+    # Ten minutes after the newer event: the older entry is long expired, so a
+    # later event must not be counted alongside it.
+    later = {
+        "type": "net.flow",
+        "ts": "2026-01-01T00:10:00.000Z",
+        "net": {"dst": "1.1.1.1"},
+    }
+    assert ruleset.evaluate(older) == []
+    assert ruleset.evaluate(later) == []
+
+
+def test_event_clock_falls_back_to_the_wall_clock():
+    assert abs(event_clock({"ts": "2026-01-01T00:00:00.000Z"}) - 1767225600.0) < 1
+    assert abs(event_clock({}) - time.time()) < 5
+    assert abs(event_clock({"ts": "not-a-time"}) - time.time()) < 5
+
+
+def test_correlation_state_is_bounded():
+    """A monitor that never forgets is a monitor that leaks."""
+    ruleset = _two_in_a_minute()
+    for index in range(ruleset.WINDOW_LIMIT + 50):
+        ruleset.evaluate(
+            {
+                "type": "net.flow",
+                "ts": "2026-01-01T00:00:00.000Z",
+                "net": {"dst": f"10.0.0.{index}"},
+            }
+        )
+    assert len(ruleset._windows) <= ruleset.WINDOW_LIMIT
+
+
 def test_correlation_groups_are_independent():
     rule = rule_from_dict(
         {
-            "id": "DMK-T-005", "title": "t", "level": "medium",
+            "id": "DMK-T-005",
+            "title": "t",
+            "level": "medium",
             "logsource": {"category": "network_connect"},
             "selection": {"net.dst|exists": True},
             "condition": "selection",

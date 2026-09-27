@@ -7,9 +7,13 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from damavik.osv import MANAGER_TO_ECOSYSTEM, OsvMirror, parse_record
-from damavik.pkgwatch import PkgWatch, looks_network_capable, parse_dpkg_status, read_dpkg_status
+from damavik.pkgwatch import (
+    PkgWatch,
+    looks_network_capable,
+    parse_dpkg_status,
+    read_dpkg_status,
+)
 from damavik.versions import compare, dpkg_compare, generic_compare
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -22,10 +26,10 @@ OSV_DIR = os.path.join(FIXTURES, "osv")
     [
         ("1.2.3", "1.2.4", -1),
         ("1.2.4", "1.2.4", 0),
-        ("1.10.0", "1.9.0", 1),           # numeric, not lexicographic
+        ("1.10.0", "1.9.0", 1),  # numeric, not lexicographic
         ("1.2.3-1", "1.2.3-2", -1),
-        ("1:1.0", "2.0", 1),              # epoch dominates
-        ("1.0~rc1", "1.0", -1),           # ~ sorts before everything
+        ("1:1.0", "2.0", 1),  # epoch dominates
+        ("1.0~rc1", "1.0", -1),  # ~ sorts before everything
         ("1.0+dfsg", "1.0", 1),
         ("2.0", "1:0.1", -1),
     ],
@@ -154,10 +158,13 @@ def watch(store):
 def test_dpkg_status_parsing():
     packages = read_dpkg_status(os.path.join(FIXTURES, "dpkg_status.txt"))
     names = {pkg["name"]: pkg["version"] for pkg in packages}
-    assert names == {"libfoo": "1.2.3", "netcat-openbsd": "1.226-1",
-                     "zlib1g": "1:1.2.13.dfsg-1"}   # 'deinstall' rows are excluded
+    assert names == {
+        "libfoo": "1.2.3",
+        "netcat-openbsd": "1.226-1",
+        "zlib1g": "1:1.2.13.dfsg-1",
+    }  # 'deinstall' rows are excluded
     libfoo = next(p for p in packages if p["name"] == "libfoo")
-    assert "long description" in libfoo["description"]   # continuation lines joined
+    assert "long description" in libfoo["description"]  # continuation lines joined
     assert libfoo["manager"] == "deb"
 
 

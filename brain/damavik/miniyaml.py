@@ -251,8 +251,10 @@ class _Parser:
         out: list[Any] = []
         while True:
             line = self.peek()
-            if line is None or line.indent != indent or not (
-                line.text == "-" or line.text.startswith("- ")
+            if (
+                line is None
+                or line.indent != indent
+                or not (line.text == "-" or line.text.startswith("- "))
             ):
                 break
             self.pos += 1
@@ -332,9 +334,7 @@ class _Parser:
                 else:
                     folded.append(item)
             text = "\n".join(folded)
-        if not keep and not chomp_none:
-            text += "\n"
-        elif keep:
+        if not keep and not chomp_none or keep:
             text += "\n"
         return text
 
@@ -354,9 +354,8 @@ def _find_key_sep(text: str) -> int:
             depth += 1
         elif ch in "]}":
             depth -= 1
-        elif ch == ":" and depth == 0:
-            if i + 1 == len(text) or text[i + 1] in (" ", "\t"):
-                return i
+        elif ch == ":" and depth == 0 and (i + 1 == len(text) or text[i + 1] in (" ", "\t")):
+            return i
     return -1
 
 
@@ -375,8 +374,7 @@ def loads(text: str, *, parser: str = "miniyaml") -> Any:
     first = lines[0]
     if first.indent != 0:
         raise YamlError(f"line {first.no}: document must start at column 0")
-    value = _Parser(lines).parse_block(0)
-    return value
+    return _Parser(lines).parse_block(0)
 
 
 def safe_load(text: str) -> Any:  # pragma: no cover - API parity helper

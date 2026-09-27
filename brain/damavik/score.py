@@ -18,9 +18,9 @@ verdicts, ever" rule is enforced: a score with no reasons is a bug, and
 
 from __future__ import annotations
 
-import os
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any
 
 from .schema import entropy_ratio, longest_label
 
@@ -89,7 +89,7 @@ class Scorer:
     seen_tuples: dict[str, int] = field(default_factory=dict)
 
     @classmethod
-    def from_config(cls, config: Any, store: Any = None) -> "Scorer":
+    def from_config(cls, config: Any, store: Any = None) -> Scorer:
         scoring = getattr(config, "scoring", {}) or {}
         return cls(
             store=store,
@@ -143,13 +143,16 @@ class Scorer:
         return result
 
     # -- per-type signals --------------------------------------------------
-    def _score_exec(self, event: dict[str, Any], proc: dict[str, Any], exe: str, ts: str,
-                    result: ScoreResult) -> None:
+    def _score_exec(
+        self, event: dict[str, Any], proc: dict[str, Any], exe: str, ts: str, result: ScoreResult
+    ) -> None:
         lowered = exe.lower()
         for directory in WORLD_WRITABLE_EXEC_DIRS:
             if lowered.startswith(directory):
                 self._add(
-                    result, 18.0, "exec_from_tmp",
+                    result,
+                    18.0,
+                    "exec_from_tmp",
                     f"executed from world-writable location {directory}",
                 )
                 break
@@ -164,13 +167,16 @@ class Scorer:
             self._add(result, 4.0, "no_hash", "executable was not hashed at exec time")
         if proc.get("signed") is False:
             self._add(result, 6.0, "unsigned", "binary is not code-signed")
-        if exe and not lowered.startswith(("/usr/", "/bin/", "/sbin/", "/lib", "/opt/", "c:\\windows\\")):
+        if exe and not lowered.startswith(
+            ("/usr/", "/bin/", "/sbin/", "/lib", "/opt/", "c:\\windows\\")
+        ):
             self._add(result, 6.0, "non_system_path", f"non-standard install path {exe}")
         if proc.get("cmd"):
             self._touch("cmd", str(proc["cmd"])[:200], ts)
 
-    def _score_flow(self, event: dict[str, Any], proc: dict[str, Any], exe: str, ts: str,
-                    result: ScoreResult) -> None:
+    def _score_flow(
+        self, event: dict[str, Any], proc: dict[str, Any], exe: str, ts: str, result: ScoreResult
+    ) -> None:
         net = event.get("net") or {}
         dst = net.get("dst") or ""
         dport = net.get("dport")
@@ -182,7 +188,9 @@ class Scorer:
             first_tuple, count = self._touch("edge", tuple_key, ts)
             if first_tuple:
                 self._add(
-                    result, 8.0, "rare_edge",
+                    result,
+                    8.0,
+                    "rare_edge",
                     f"new (binary, destination, port) edge to {dst}:{dport}",
                 )
             elif count <= 2:
@@ -195,7 +203,9 @@ class Scorer:
         bytes_out = int(net.get("bytes_out") or net.get("bytes") or 0)
         if bytes_out >= EXFIL_BYTES:
             self._add(
-                result, 12.0, "bulk_egress",
+                result,
+                12.0,
+                "bulk_egress",
                 f"{bytes_out / 1048576:.1f} MiB uploaded in one flow",
             )
 
@@ -208,7 +218,9 @@ class Scorer:
         ratio = entropy_ratio(label)
         if len(label) >= self.entropy_min_len and ratio >= self.entropy_ratio_threshold:
             self._add(
-                result, 25.0, "dns_high_entropy",
+                result,
+                25.0,
+                "dns_high_entropy",
                 f"label '{label[:24]}' carries {ratio:.2f} of its maximum entropy",
             )
         if qname.count(".") >= 4:
@@ -221,8 +233,9 @@ class Scorer:
         if (dns.get("rtype") or "").upper() == "TXT":
             self._add(result, 10.0, "dns_txt", "TXT lookup (a classic tunnel channel)")
 
-    def _score_verdict(self, event: dict[str, Any], proc: dict[str, Any], exe: str, ts: str,
-                       result: ScoreResult) -> None:
+    def _score_verdict(
+        self, event: dict[str, Any], proc: dict[str, Any], exe: str, ts: str, result: ScoreResult
+    ) -> None:
         for tag in event.get("yara") or []:
             if tag not in result.tags:
                 result.tags.append(str(tag))
@@ -231,9 +244,7 @@ class Scorer:
             tag = f"intel_{verdict}"
             if tag not in result.tags:
                 result.tags.append(tag)
-            self._add(
-                result, 0.0, "", f"intel provider returned '{verdict}' for this file"
-            )
+            self._add(result, 0.0, "", f"intel provider returned '{verdict}' for this file")
 
     def _score_package(self, event: dict[str, Any], ts: str, result: ScoreResult) -> None:
         pkg = event.get("pkg") or {}
@@ -247,7 +258,9 @@ class Scorer:
                     severity, 30.0
                 )
                 self._add(
-                    result, points, "pkg_cve",
+                    result,
+                    points,
+                    "pkg_cve",
                     f"installed with known vulnerabilities: {', '.join(map(str, cves[:3]))}",
                 )
         elif action == "downgrade":
@@ -272,7 +285,9 @@ class Scorer:
         result.rule = top.rule_id
         bonus = LEVEL_BONUS.get(top.level, 15.0)
         self._add(
-            result, bonus, f"rule:{top.rule_id}",
+            result,
+            bonus,
+            f"rule:{top.rule_id}",
             f"rule {top.rule_id} ({top.level}): {top.title}",
         )
         extra = min(len(fired) - 1, 3) * 5.0
@@ -283,15 +298,13 @@ class Scorer:
     def _apply_allowlist(self, proc: dict[str, Any], exe: str, result: ScoreResult) -> None:
         if not self.allowlist_exes and not self.allowlist_hashes:
             return
-        hard = {"malware", "trojan", "stealer", "rat", "ransomware", "backdoor",
-                "intel_malicious"}
+        hard = {"malware", "trojan", "stealer", "rat", "ransomware", "backdoor", "intel_malicious"}
         if hard & set(result.tags):
-            result.reasons.append(
-                "allowlist ignored: hard malicious tag present"
-            )
+            result.reasons.append("allowlist ignored: hard malicious tag present")
             return
-        if exe in self.allowlist_exes or (proc.get("sha256") in self.allowlist_hashes
-                                          and proc.get("sha256")):
+        if exe in self.allowlist_exes or (
+            proc.get("sha256") in self.allowlist_hashes and proc.get("sha256")
+        ):
             result.score = 0.0
             result.tags.append("allowlisted")
             result.reasons.append("allowlisted by configuration (score forced to 0)")

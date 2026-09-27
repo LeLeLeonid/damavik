@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: TXT record lookup
+id: DMK-D-003
+status: stable
+level: low
+description: >-
+  TXT is the most common tunnel record type.  On its own this is weak - it is
+  here so the timeline shows the channel.
+tags:
+  - attack.exfiltration
+logsource:
+  category: dns_query
+selection:
+  dns.rtype: TXT
+condition: selection

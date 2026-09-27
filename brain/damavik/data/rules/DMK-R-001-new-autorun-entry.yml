@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: New autorun entry
+id: DMK-R-001
+status: test
+level: high
+description: >-
+  A startup item, service or scheduled task that was not there at the previous
+  osquery differential.  Persistence is the loudest part of an intrusion.
+tags:
+  - attack.persistence
+  - attack.t1547
+logsource:
+  category: any
+selection:
+  type: sys.event
+  meta.kind: autorun
+  meta.action: new
+condition: selection

@@ -24,8 +24,9 @@ import hashlib
 import json
 import os
 import threading
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any
 
 FRAME = "j1"
 GENESIS = "0" * 64
@@ -108,7 +109,9 @@ class Journal:
 
     def _handle(self) -> Any:
         if self._fh is None:
-            self._fh = open(self.path, "a", encoding="utf-8")
+            # One append handle for the life of the process, closed by close();
+            # a per-record context manager would reopen the file per event.
+            self._fh = open(self.path, "a", encoding="utf-8")  # noqa: SIM115
         return self._fh
 
     def close(self) -> None:
@@ -121,7 +124,7 @@ class Journal:
                 self._fh.close()
                 self._fh = None
 
-    def __enter__(self) -> "Journal":
+    def __enter__(self) -> Journal:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -141,8 +144,9 @@ class Journal:
             # serialised, and the key order below is exactly what sort_keys
             # would emit (dmk, h, prev, rec, seq), so the bytes are identical
             # while saving a second json.dumps per record.
-            line = '{{"dmk":"{}","h":"{}","prev":"{}","rec":{},"seq":{}}}'.format(
-                FRAME, digest, prev, record_json, seq
+            line = (
+                f'{{"dmk":"{FRAME}","h":"{digest}","prev":"{prev}",'
+                f'"rec":{record_json},"seq":{seq}}}'
             )
             handle = self._handle()
             handle.write(line + "\n")
@@ -167,7 +171,7 @@ class Journal:
     def read(self) -> Iterator[JournalEntry]:
         if not os.path.exists(self.path):
             return
-        with open(self.path, "r", encoding="utf-8") as handle:
+        with open(self.path, encoding="utf-8") as handle:
             for lineno, line in enumerate(handle, start=1):
                 line = line.strip()
                 if not line:

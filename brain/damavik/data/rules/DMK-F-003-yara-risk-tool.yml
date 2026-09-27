@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Dual-use administration tool executed
+id: DMK-F-003
+status: stable
+level: info
+description: >-
+  Hacktool/admin-tool match.  Dual-use software is NOT malware: this rule
+  exists to record the fact for the timeline, not to alarm anyone.
+tags:
+  - policy
+logsource:
+  category: file_event
+selection:
+  yara|contains:
+    - risk_tool
+    - admin_tool
+condition: selection

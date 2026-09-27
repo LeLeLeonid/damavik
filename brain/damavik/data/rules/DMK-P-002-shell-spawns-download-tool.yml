@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Leonidas Zervas and Damavik contributors
+# SPDX-License-Identifier: GPL-3.0-only
+title: Shell spawns a download tool
+id: DMK-P-002
+status: stable
+level: medium
+description: >-
+  A download tool started by a shell, especially one writing into a
+  world-writable directory, is how a dropper fetches stage two.
+tags:
+  - attack.command_and_control
+  - attack.t1105
+logsource:
+  category: process_creation
+selection:
+  meta.parent_is_shell: true
+  meta.child_is_downloader: true
+condition: selection

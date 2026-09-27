@@ -16,8 +16,10 @@ import time
 from typing import Any
 
 from . import SCHEMA_VERSION, __version__
-from .config import Config, ConfigError, load as load_config
-from .journal import Journal, verify as verify_journal
+from .config import Config, ConfigError
+from .config import load as load_config
+from .journal import Journal
+from .journal import verify as verify_journal
 from .osv import OsvMirror
 from .pipeline import Pipeline
 from .pkgwatch import PkgWatch, read_dpkg_status
@@ -26,8 +28,13 @@ from .schema import validate_event
 from .sensorpy import ProcSensor, tail_dns_log
 from .store import Store
 
-LEVEL_COLOR = {"critical": "\033[31m", "high": "\033[91m", "medium": "\033[33m",
-               "low": "\033[36m", "info": "\033[37m"}
+LEVEL_COLOR = {
+    "critical": "\033[31m",
+    "high": "\033[91m",
+    "medium": "\033[33m",
+    "low": "\033[36m",
+    "info": "\033[37m",
+}
 RESET = "\033[0m"
 
 
@@ -70,29 +77,70 @@ def repo_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-def find_data(name: str, override: str | None = None) -> str:
-    """Resolve a shipped data path (``rules``, a fixture) to something real.
+def env_key_for(name: str, env_key: str | None = None) -> str:
+    """Environment variable that overrides where ``name`` is looked up."""
+    if env_key:
+        return env_key
+    stem = os.path.basename(name).split(".")[0]
+    safe = "".join(ch if ch.isalnum() else "_" for ch in stem).strip("_").upper()
+    return f"DAMAVIK_{safe}_DIR"
 
-    Search order: explicit override, ``$DAMAVIK_<NAME>_DIR``, the current
-    directory, the checkout, then ``/usr/share/damavik`` (where
-    ``packaging/install.sh`` puts things).  The CWD candidate is returned when
-    nothing exists, so error messages point somewhere sensible.
+
+def package_data_dir() -> str:
+    """Where a ``pip install`` keeps the vendored rules and fixtures."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+
+
+def data_candidates(name: str, *, env_key: str | None = None) -> list[str]:
+    """Every place a shipped path may live, most specific first.
+
+    Order: an environment override, the current directory, the checkout root,
+    the copy vendored inside the installed package (``damavik/data/``, which
+    ``pip install`` ships), then ``/usr/share/damavik`` where
+    ``packaging/install.sh`` puts things.  Exposed as a list so tests can pin
+    the order and packaging tests can assert the vendored copy is reachable.
+    """
+    env = os.environ.get(env_key_for(name, env_key))
+    candidates = []
+    if env:
+        candidates.append(os.path.expanduser(env))
+    candidates += [
+        os.path.join(os.getcwd(), name),
+        os.path.join(repo_root(), name),
+        os.path.join(package_data_dir(), name),
+        os.path.join("/usr/share/damavik", name),
+    ]
+    return candidates
+
+
+def find_data(name: str, override: str | None = None, *, env_key: str | None = None) -> str:
+    """Resolve a shipped data path (``rules``, the demo capture) to something real.
+
+    The CWD candidate is returned when nothing exists, so the error message
+    points somewhere the operator can act on; ``data_hint`` explains how to fix
+    it.  See ``data_candidates`` for the search order.
     """
     if override:
         return os.path.expanduser(override)
-    env_key = "DAMAVIK_" + os.path.basename(name).upper().replace("-", "_") + "_DIR"
-    env = os.environ.get(env_key)
+    env = os.environ.get(env_key_for(name, env_key))
     if env:
+        # An explicit environment override is honoured even when it is wrong:
+        # the operator meant that path, and the error message must name it.
         return os.path.expanduser(env)
-    cwd_candidate = os.path.join(os.getcwd(), name)
-    for candidate in (
-        cwd_candidate,
-        os.path.join(repo_root(), name),
-        os.path.join("/usr/share/damavik", name),
-    ):
+    candidates = data_candidates(name, env_key=env_key)
+    for candidate in candidates:
         if os.path.exists(candidate):
             return candidate
-    return cwd_candidate
+    return candidates[0]
+
+
+def data_hint(name: str, env_key: str | None = None) -> str:
+    """One line telling an operator where ``name`` comes from."""
+    return (
+        f"hint: {name} ships with the checkout, with `pip install` and with "
+        "`packaging/install.sh` (which installs it under /usr/share/damavik).  "
+        f"Set {env_key_for(name, env_key)} to point at it."
+    )
 
 
 DEFAULT_RULES = "rules"
@@ -122,15 +170,33 @@ def cmd_run(args: argparse.Namespace) -> int:
     cfg = _config(args)
     with Pipeline(cfg) as pipeline:
         if args.file:
-            pipeline.run_file(args.file)
+            pipeline.run_file(args.file, rebase=args.rebase)
         else:
             pipeline.run(sys.stdin)
         stats = pipeline.stats.as_dict()
         stats["ingest"] = pipeline.ingest_stats.as_dict()
         stats["rules_loaded"] = len(pipeline.rules)
-        _emit(stats, args.json,
-              f"events={stats['events']} alerts={stats['alerts']} "
-              f"rules={stats['rules_loaded']} rejected={stats['ingest']['rejected']}")
+        _emit(
+            stats,
+            args.json,
+            f"events={stats['events']} alerts={stats['alerts']} "
+            f"rules={stats['rules_loaded']} rejected={stats['ingest']['rejected']}",
+        )
+        removed = stats["retention_removed"]
+        if removed["events"] or removed["alerts"]:
+            print(
+                f"retention: pruned {removed['events']} events and {removed['alerts']} "
+                f"alerts older than {cfg.retention_days} days from the inherited index",
+                file=sys.stderr,
+            )
+        if stats["stale_capture_s"]:
+            days = stats["stale_capture_s"] / 86400.0
+            print(
+                f"note: the newest event in this capture is {days:.1f} days old "
+                f"(retention_days={cfg.retention_days}, dashboard window 24 h). "
+                "Re-run with --rebase to replay it on the current clock.",
+                file=sys.stderr,
+            )
     return 0
 
 
@@ -141,7 +207,9 @@ def cmd_sensor(args: argparse.Namespace) -> int:
         exec_hash=bool(cfg.sensor.get("exec_hash", True)),
         flows=bool(cfg.sensor.get("flows", True)),
     )
-    out = open(args.out, "a", encoding="utf-8") if args.out else sys.stdout
+    # Held open for the life of the command and closed in the finally block
+    # below; a sensor writing one event at a time must not reopen per event.
+    out = open(args.out, "a", encoding="utf-8") if args.out else sys.stdout  # noqa: SIM115
     try:
         if args.dns_tail:
             import threading
@@ -312,12 +380,17 @@ def cmd_pkg_list(args: argparse.Namespace) -> int:
     vulnerable = watch.vulnerable()
     store.close()
     if args.json:
-        print(json.dumps({"scan": scan, "packages": packages, "vulnerable": vulnerable},
-                         sort_keys=True))
+        print(
+            json.dumps(
+                {"scan": scan, "packages": packages, "vulnerable": vulnerable}, sort_keys=True
+            )
+        )
         return 0
     if scan:
-        print(f"scanned {scan['scanned']} packages, {scan['changes']} changes, "
-              f"{scan['removed']} removed")
+        print(
+            f"scanned {scan['scanned']} packages, {scan['changes']} changes, "
+            f"{scan['removed']} removed"
+        )
     print(f"{len(packages)} packages tracked, {len(vulnerable)} with a known CVE")
     for item in vulnerable[: args.limit]:
         print(
@@ -338,12 +411,14 @@ def cmd_osv_sync(args: argparse.Namespace) -> int:
     stats["rows_indexed"] = rows
     store.set_meta("osv_dir", directory)
     store.close()
-    _emit(stats, args.json, f"loaded {stats['advisories']} advisories from {directory}, "
-                            f"indexed {rows} rows")
+    _emit(
+        stats,
+        args.json,
+        f"loaded {stats['advisories']} advisories from {directory}, indexed {rows} rows",
+    )
     if loaded == 0:
         print(
-            "hint: place OSV records (*.json) or an ecosystem all.zip in "
-            f"{mirror.directory}",
+            f"hint: place OSV records (*.json) or an ecosystem all.zip in {mirror.directory}",
             file=sys.stderr,
         )
     return 0
@@ -351,11 +426,40 @@ def cmd_osv_sync(args: argparse.Namespace) -> int:
 
 def cmd_verify(args: argparse.Namespace) -> int:
     cfg = _config(args)
-    journal = Journal(cfg.journal_path())
+    path = cfg.journal_path()
+    if not os.path.exists(path):
+        # A missing journal is not automatically fine: if the index has events,
+        # the audit trail was deleted, and "OK: 0 entries" would be a gate that
+        # cannot fail.
+        indexed = 0
+        if os.path.exists(cfg.db_path()):
+            store = Store(cfg.db_path())
+            try:
+                indexed = store.count_events()
+            finally:
+                store.close()
+        if indexed:
+            _emit(
+                {"ok": False, "entries": 0, "reason": "journal missing", "path": path},
+                args.json,
+                f"journal MISSING at {path} but {indexed} events are indexed: "
+                "the audit trail was deleted, not never written",
+            )
+            return 2
+        _emit(
+            {"ok": True, "entries": 0, "reason": "no journal yet", "path": path},
+            args.json,
+            f"no journal yet at {path}: nothing has been ingested on this host",
+        )
+        return 0
+    journal = Journal(path)
     report = verify_journal(journal)
-    _emit(report.as_dict(), args.json,
-          f"journal {'OK' if report.ok else 'BROKEN'}: {report.entries} entries"
-          + (f", first bad line {report.first_bad_line}: {report.reason}" if not report.ok else ""))
+    _emit(
+        report.as_dict(),
+        args.json,
+        f"journal {'OK' if report.ok else 'BROKEN'}: {report.entries} entries"
+        + (f", first bad line {report.first_bad_line}: {report.reason}" if not report.ok else ""),
+    )
     journal.close()
     return 0 if report.ok else 2
 
@@ -416,7 +520,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     from .normalize import parse_line
 
     total = accepted = problems = 0
-    with open(os.path.expanduser(args.file), "r", encoding="utf-8", errors="replace") as handle:
+    with open(os.path.expanduser(args.file), encoding="utf-8", errors="replace") as handle:
         for lineno, line in enumerate(handle, start=1):
             if not line.strip():
                 continue
@@ -431,8 +535,9 @@ def cmd_validate(args: argparse.Namespace) -> int:
             if errors:
                 problems += 1
                 print(f"line {lineno}: {'; '.join(errors)}")
-    print(f"validated {total} lines from {args.file}: {accepted or total - problems} ok, "
-          f"{problems} invalid")
+                continue
+            accepted += 1
+    print(f"validated {total} lines from {args.file}: {accepted} ok, {problems} invalid")
     return 1 if problems else 0
 
 
@@ -446,22 +551,29 @@ def cmd_selftest(args: argparse.Namespace) -> int:
         failures.extend(errors)
     if len(ruleset) == 0:
         failures.append("no rules loaded")
-    fixture = find_data(DEFAULT_FIXTURE, args.fixture)
+    fixture = find_data(DEFAULT_FIXTURE, args.fixture, env_key="DAMAVIK_FIXTURE")
     if not os.path.exists(fixture):
         failures.append(f"demo fixture missing: {fixture}")
+        failures.append(data_hint(DEFAULT_FIXTURE, "DAMAVIK_FIXTURE"))
         _emit({"ok": False, "failures": failures}, args.json, "selftest FAILED")
         return 1
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmp:
-        cfg = Config(state_dir=tmp, rules={"dir": find_data(DEFAULT_RULES, args.rules_dir)},
-                     offline=True, alerts={"path": "alerts.log", "notify": False,
-                                           "cooldown_s": 0, "min_score": 45})
+        cfg = Config(
+            state_dir=tmp,
+            rules={"dir": find_data(DEFAULT_RULES, args.rules_dir)},
+            offline=True,
+            alerts={"path": "alerts.log", "notify": False, "cooldown_s": 0, "min_score": 45},
+        )
         with Pipeline(cfg) as pipeline:
-            pipeline.run_file(fixture)
+            pipeline.run_file(fixture, rebase=True)
             stats = pipeline.stats.as_dict()
             summary = pipeline.store.summary()
-            summary_alerts = pipeline.store.alerts(limit=50)
+            summary_alerts = pipeline.store.alerts(limit=100)
+            dropped = [
+                alert["id"] for alert in summary_alerts if not alert.get("explain", "").strip()
+            ]
             report = verify_journal(pipeline.journal)
         if stats["events"] == 0:
             failures.append("no events were processed")
@@ -469,11 +581,27 @@ def cmd_selftest(args: argparse.Namespace) -> int:
             failures.append("the attack-chain fixture produced no alerts")
         if not report.ok:
             failures.append(f"journal chain broken: {report.reason}")
-        unexplained = [
-            alert["id"] for alert in summary_alerts if not alert.get("explain", "").strip()
-        ]
-        if unexplained:
-            failures.append(f"alerts with no explanation: {', '.join(unexplained)}")
+        if dropped:
+            failures.append(f"alerts with no explanation: {', '.join(dropped)}")
+        # Assert the *stored* result, not the in-memory counters.  A previous
+        # version of this function reported "selftest OK ... alerts=27" while
+        # the index held zero rows, which made it a gate that could not fail -
+        # and it is the gate `packaging/install.sh` refuses to install without.
+        if summary["events"] != stats["events"]:
+            failures.append(
+                f"only {summary['events']} of {stats['events']} events are in the index"
+            )
+        if int(summary["alerts"]) != len(summary_alerts) or not summary_alerts:
+            failures.append(
+                f"the index holds {summary['alerts']} alerts but returned {len(summary_alerts)}"
+            )
+        ranked = [alert for alert in summary_alerts if alert["level"] in ("high", "critical")]
+        if not ranked:
+            failures.append("no alert reached high or critical - the chain is not detected")
+        if stats["retention_removed"]["events"]:
+            failures.append(
+                f"retention pruned {stats['retention_removed']['events']} events during the run"
+            )
     result = {
         "ok": not failures,
         "version": __version__,
@@ -485,10 +613,14 @@ def cmd_selftest(args: argparse.Namespace) -> int:
         "journal": report.as_dict(),
         "failures": failures,
     }
-    _emit(result, args.json,
-          f"selftest {'OK' if not failures else 'FAILED'}: rules={len(ruleset)} "
-          f"events={stats['events']} alerts={stats['alerts']} "
-          f"journal={'ok' if report.ok else 'broken'}")
+    _emit(
+        result,
+        args.json,
+        f"selftest {'OK' if not failures else 'FAILED'}: rules={len(ruleset)} "
+        f"events={stats['events']} alerts={stats['alerts']} "
+        f"stored_alerts={len(summary_alerts)} "
+        f"journal={'ok' if report.ok else 'broken'}",
+    )
     for failure in failures:
         print(f"  ! {failure}", file=sys.stderr)
     return 0 if not failures else 1
@@ -500,17 +632,20 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
     from .replay import expand
 
-    fixture = find_data(DEFAULT_FIXTURE, args.fixture)
-    with open(fixture, "r", encoding="utf-8") as handle:
+    fixture = find_data(DEFAULT_FIXTURE, args.fixture, env_key="DAMAVIK_FIXTURE")
+    with open(fixture, encoding="utf-8") as handle:
         base_lines = [line for line in handle if line.strip()]
     if not base_lines:
         print(f"no events in {fixture}", file=sys.stderr)
         return 1
     lines = list(expand(base_lines, args.events))
     with tempfile.TemporaryDirectory() as tmp:
-        cfg = Config(state_dir=tmp, rules={"dir": find_data(DEFAULT_RULES, args.rules_dir)}, offline=True,
-                     alerts={"path": "alerts.log", "notify": False, "cooldown_s": 0,
-                             "min_score": 45})
+        cfg = Config(
+            state_dir=tmp,
+            rules={"dir": find_data(DEFAULT_RULES, args.rules_dir)},
+            offline=True,
+            alerts={"path": "alerts.log", "notify": False, "cooldown_s": 0, "min_score": 45},
+        )
         started = time.perf_counter()
         with Pipeline(cfg) as pipeline:
             pipeline.run(lines)
@@ -539,7 +674,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
 def _rss_kb() -> int:
     try:
-        with open("/proc/self/status", "r", encoding="utf-8") as handle:
+        with open("/proc/self/status", encoding="utf-8") as handle:
             for line in handle:
                 if line.startswith("VmRSS:"):
                     return int(line.split()[1])
@@ -552,23 +687,32 @@ def cmd_demo(args: argparse.Namespace) -> int:
     """Load the demo capture into a throwaway state dir and print what happened."""
     import tempfile
 
-    fixture = find_data(DEFAULT_FIXTURE, args.fixture)
+    fixture = find_data(DEFAULT_FIXTURE, args.fixture, env_key="DAMAVIK_FIXTURE")
     if not os.path.exists(fixture):
         print(f"missing fixture: {fixture}", file=sys.stderr)
+        print(data_hint(DEFAULT_FIXTURE, "DAMAVIK_FIXTURE"), file=sys.stderr)
         return 1
     with tempfile.TemporaryDirectory() as tmp:
-        cfg = Config(state_dir=tmp, rules={"dir": find_data(DEFAULT_RULES, args.rules_dir)}, offline=True,
-                     alerts={"path": "alerts.log", "notify": False, "cooldown_s": 0,
-                             "min_score": 45})
+        cfg = Config(
+            state_dir=tmp,
+            rules={"dir": find_data(DEFAULT_RULES, args.rules_dir)},
+            offline=True,
+            alerts={"path": "alerts.log", "notify": False, "cooldown_s": 0, "min_score": 45},
+        )
         with Pipeline(cfg) as pipeline:
-            pipeline.run_file(fixture)
+            # The shipped capture is synthetic: replay it on the current clock
+            # so the demo, the timeline and retention all agree, today and in a
+            # year's time.
+            pipeline.run_file(fixture, rebase=True)
             alerts = pipeline.store.alerts(limit=args.limit)
             stats = pipeline.stats.as_dict()
         if args.json:
             print(json.dumps({"stats": stats, "alerts": alerts}, sort_keys=True, default=str))
             return 0
-        print(f"processed {stats['events']} events -> {stats['alerts']} alerts "
-              f"(showing {len(alerts)})\n")
+        print(
+            f"processed {stats['events']} events -> {stats['alerts']} alerts "
+            f"(showing {len(alerts)})\n"
+        )
         for alert in alerts:
             print(f"  [{alert['level'].upper():8s}] {alert['score']:5.1f}  {alert['title']}")
             print(f"             why: {alert['explain'][:110]}")
@@ -576,26 +720,57 @@ def cmd_demo(args: argparse.Namespace) -> int:
 
 
 # ------------------------------------------------------------------- plumbing
+def add_runtime_options(parser: argparse.ArgumentParser, *, suppress: bool = False) -> None:
+    """The options that apply to every subcommand.
+
+    They are accepted both before and after the subcommand.  ``suppress`` (used
+    for the per-subcommand copies) keeps argparse from resetting a value that
+    was already parsed at the top level.
+    """
+    default: Any = argparse.SUPPRESS if suppress else None
+    parser.add_argument("--config", default=default, metavar="PATH", help="path to damavik.yaml")
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        default=default,
+        help="kill every intel plugin for this run",
+    )
+    parser.add_argument(
+        "--state-dir", default=default, metavar="PATH", help="override the state directory"
+    )
+    parser.add_argument(
+        "--rules-dir", default=default, metavar="PATH", help="override the rules directory"
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="damavik",
         description="Local-first threat monitor.  Nothing leaves the box.",
     )
     parser.add_argument("--version", action="version", version=f"damavik {__version__}")
-    parser.add_argument("--config", help="path to damavik.yaml")
-    parser.add_argument("--offline", action="store_true",
-                        help="kill every intel plugin for this run")
-    parser.add_argument("--state-dir", help="override the state directory")
-    parser.add_argument("--rules-dir", help="override the rules directory")
+    add_runtime_options(parser)
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add(name: str, func: Any, help_text: str) -> argparse.ArgumentParser:
         child = sub.add_parser(name, help=help_text, description=help_text)
+        # Runtime options also after the subcommand: the systemd units ship
+        # `damavik run --config /etc/damavik/damavik.yaml`, and a global-only
+        # --config turned that into "unrecognized arguments" - a service that
+        # could never start.  SUPPRESS keeps a value given before the
+        # subcommand when none is given after it.
+        add_runtime_options(child, suppress=True)
         child.set_defaults(func=func)
         return child
 
     run = add("run", cmd_run, "read JSONL events from stdin or a file and run the pipeline")
     run.add_argument("--file", help="read from a file instead of stdin")
+    run.add_argument(
+        "--rebase",
+        action="store_true",
+        help="replay a capture on the current clock, preserving its spacing "
+        "(default: keep the recorded timestamps)",
+    )
     run.add_argument("--json", action="store_true")
 
     sensor = add("sensor", cmd_sensor, "run the pure-Python reference sensor (no root needed)")

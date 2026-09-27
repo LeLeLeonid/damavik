@@ -14,8 +14,9 @@ from __future__ import annotations
 import json
 import os
 import socket
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Iterator
+from typing import Any
 
 from .schema import EVENT_TYPES, event_id, to_iso, utcnow_iso, validate_event
 
@@ -191,10 +192,14 @@ def iter_jsonl(
         yield event
 
 
-def read_file(path: str, *, host: str | None = None,
-              max_bytes: int = DEFAULT_MAX_EVENT_BYTES,
-              stats: IngestStats | None = None) -> Iterator[dict[str, Any]]:
-    with open(os.path.expanduser(path), "r", encoding="utf-8", errors="replace") as handle:
+def read_file(
+    path: str,
+    *,
+    host: str | None = None,
+    max_bytes: int = DEFAULT_MAX_EVENT_BYTES,
+    stats: IngestStats | None = None,
+) -> Iterator[dict[str, Any]]:
+    with open(os.path.expanduser(path), encoding="utf-8", errors="replace") as handle:
         yield from iter_jsonl(handle, host=host, max_bytes=max_bytes, stats=stats)
 
 

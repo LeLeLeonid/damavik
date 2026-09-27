@@ -15,7 +15,7 @@ import hashlib
 import ipaddress
 import math
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 EVENT_TYPES = (
@@ -43,6 +43,7 @@ def is_ip_literal(text: str) -> bool:
         return False
     return True
 
+
 #: Fields whose type must be exactly as declared.  Unknown fields are allowed
 #: (forward compatibility) but land in ``meta`` rather than being silently
 #: promoted into scoring logic.
@@ -65,7 +66,7 @@ class EventError(ValueError):
 
 def utcnow_iso() -> str:
     """Current time as RFC 3339 UTC with millisecond precision."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 def to_iso(value: Any) -> str:
@@ -80,8 +81,7 @@ def to_iso(value: Any) -> str:
             seconds /= 1000.0
         if seconds > 1e15:  # microseconds
             seconds /= 1000.0
-        return datetime.fromtimestamp(seconds, timezone.utc).strftime(
-            "%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        return datetime.fromtimestamp(seconds, UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
     if isinstance(value, str):
         text = value.strip()
         if not text:
@@ -93,8 +93,8 @@ def to_iso(value: Any) -> str:
         except ValueError as exc:
             raise EventError(f"unparseable timestamp {value!r}") from exc
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+            dt = dt.replace(tzinfo=UTC)
+        return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
     raise EventError(f"unsupported timestamp type {type(value).__name__}")
 
 
@@ -168,8 +168,16 @@ def validate_event(event: dict[str, Any]) -> list[str]:
         else:
             _require(pkg, "name", errors, "pkg")
             manager = pkg.get("manager")
-            if manager is not None and manager not in ("deb", "rpm", "msi", "pip", "cargo",
-                                                       "npm", "apk", "other"):
+            if manager is not None and manager not in (
+                "deb",
+                "rpm",
+                "msi",
+                "pip",
+                "cargo",
+                "npm",
+                "apk",
+                "other",
+            ):
                 errors.append(f"pkg.manager: unknown manager {manager!r}")
 
     score = event.get("score")

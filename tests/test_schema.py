@@ -8,11 +8,11 @@ import json
 import os
 
 import pytest
-
 from damavik.schema import (
     EVENT_TYPES,
     LEVELS,
     VERDICTS,
+    EventError,
     entropy_ratio,
     event_id,
     iso_to_ms,
@@ -27,7 +27,13 @@ GOOD = {
     "ts": "2026-09-10T10:00:00.000Z",
     "host": "h1",
     "type": "proc.exec",
-    "proc": {"pid": 10, "ppid": 1, "exe": "/bin/sh", "sha256": "a" * 64, "signed": False},
+    "proc": {
+        "pid": 10,
+        "ppid": 1,
+        "exe": "/bin/sh",
+        "sha256": "a" * 64,
+        "signed": False,
+    },
 }
 
 
@@ -69,7 +75,7 @@ def test_every_declared_event_type_is_accepted():
     [
         (0, "1970-01-01T00:00:00.000Z"),
         (1789034400, "2026-09-10T10:00:00.000Z"),
-        (1789034400000, "2026-09-10T10:00:00.000Z"),          # milliseconds
+        (1789034400000, "2026-09-10T10:00:00.000Z"),  # milliseconds
         ("2026-09-10T10:00:00Z", "2026-09-10T10:00:00.000Z"),
         ("2026-09-10T12:00:00+02:00", "2026-09-10T10:00:00.000Z"),
     ],
@@ -79,7 +85,7 @@ def test_timestamp_coercion(value, expected):
 
 
 def test_timestamp_rejects_garbage():
-    with pytest.raises(Exception):
+    with pytest.raises(EventError):
         to_iso("yesterday")
 
 
@@ -113,8 +119,13 @@ def test_longest_label():
 
 
 def test_alert_validation():
-    good = {"id": "a-1", "ts": "2026-09-10T10:00:00.000Z", "title": "t",
-            "level": "high", "score": 80.0}
+    good = {
+        "id": "a-1",
+        "ts": "2026-09-10T10:00:00.000Z",
+        "title": "t",
+        "level": "high",
+        "score": 80.0,
+    }
     assert validate_alert(good) == []
     assert validate_alert({**good, "level": "urgent"})
     assert validate_alert({**good, "score": 500})
@@ -161,8 +172,7 @@ def test_event_schema_required_fields_match_the_validator():
     doc = _load_schema("event.schema.json")
     assert doc["required"] == ["ts", "type"]
     # conditional requirements the validator does not enforce but documents
-    kinds = {clause["if"]["properties"]["type"]["const"]
-             for clause in doc["allOf"]}
+    kinds = {clause["if"]["properties"]["type"]["const"] for clause in doc["allOf"]}
     assert kinds == {"dns.query", "net.flow", "pkg.event"}
 
 
