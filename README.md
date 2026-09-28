@@ -123,7 +123,7 @@ event and delete every event in the same call, leaving `demo` reporting
 ## Development
 
 ```sh
-python3 -m pytest tests/ -q          # 418 tests, ~16 s, no network, no root
+python3 -m pytest tests/ -q          # 419 tests, ~16 s, no network, no root
 python3 -m damavik.cli bench --gate  # performance budgets
 python3 -m ruff check brain tests && python3 -m ruff format --check brain tests
 ```

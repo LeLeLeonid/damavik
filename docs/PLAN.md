@@ -204,7 +204,7 @@ deleted, not never written` (exit 2) otherwise.
 
 | Gate | Before | After |
 |---|---|---|
-| `pytest tests/ -q` | 25 failed, 351 passed | 418 passed in ~16 s |
+| `pytest tests/ -q` | 25 failed, 351 passed | 419 passed in ~16 s |
 | `ruff check brain tests` | 89 errors | clean |
 | `ruff format --check` | 32 files unformatted | clean |
 | `pip install .` + `damavik selftest` outside the checkout | `DistutilsOptionError`, then 0 rules | installs, `selftest OK` |
@@ -329,7 +329,7 @@ design; anything that breaks those two sentences is a different product.
 
 Commands run on the checkout after the fixes, not claims:
 
-* `pytest tests/ -q` → 418 passed in ~16 s, no network, no root.
+* `pytest tests/ -q` → 419 passed in ~16 s, no network, no root.
 * `reuse lint` → compliant (104/104 files), the same version CI runs.
 * Every CI gate re-run locally as one pass: `ruff check`, `ruff format --check,
   pytest`, `selftest`, the `demo` smoke check, `bench --events 5000 --gate`,
