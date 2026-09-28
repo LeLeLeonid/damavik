@@ -351,17 +351,33 @@ def _osv_dir(cfg: Config, override: str | None) -> str:
     return str((cfg.intel.get("osv_mirror") or {}).get("dir") or "~/.local/share/damavik/osv")
 
 
+def _watcher(cfg: Config, store: Any, args: argparse.Namespace) -> PkgWatch:
+    """Build the package watcher: dpkg inventory + whatever the OSV mirror holds."""
+    mirror = OsvMirror(_osv_dir(cfg, args.osv_dir))
+    mirror.load_dir()
+    return PkgWatch(store=store, mirror=mirror, host=cfg.resolved_host_id())
+
+
 def cmd_pkg_list(args: argparse.Namespace) -> int:
+    """Report the inventory; ``--scan`` first diffs it and records the news."""
     cfg = _config(args)
-    with Pipeline(cfg) as pipeline:
-        mirror = OsvMirror(_osv_dir(cfg, args.osv_dir))
-        mirror.load_dir()
-        watch = PkgWatch(store=pipeline.store, mirror=mirror, host=cfg.resolved_host_id())
-        scan: dict[str, Any] | None = None
-        if args.scan:
+    scan: dict[str, Any] | None = None
+    if args.scan:
+        # A scan writes events, so it goes through the pipeline - and therefore
+        # through the journal and the alert sink.  A plain listing does not, and
+        # must not: reading the inventory should not create an audit trail.
+        with Pipeline(cfg) as pipeline:
+            watch = _watcher(cfg, pipeline.store, args)
             scan = _scan_packages(pipeline, watch, args)
-        packages = pipeline.store.packages(manager=args.manager)
-        vulnerable = watch.vulnerable()
+            packages = pipeline.store.packages(manager=args.manager)
+            vulnerable = watch.vulnerable()
+    else:
+        store = Store(cfg.db_path())
+        try:
+            packages = store.packages(manager=args.manager)
+            vulnerable = _watcher(cfg, store, args).vulnerable()
+        finally:
+            store.close()
     if args.json:
         print(
             json.dumps(
@@ -370,10 +386,13 @@ def cmd_pkg_list(args: argparse.Namespace) -> int:
         )
         return 0
     if scan:
+        baseline = " (baseline: recorded, nothing to report)" if scan["baseline"] else ""
         print(
             f"scanned {scan['scanned']} packages, {scan['changes']} changes, "
-            f"{scan['removed']} removed"
+            f"{scan['removed']} removed{baseline}"
         )
+        if not scan["baseline"]:
+            print(f"  {scan['events']} new events, {scan['alerts']} alerts")
     print(f"{len(packages)} packages tracked, {len(vulnerable)} with a known CVE")
     for item in vulnerable[: args.limit]:
         print(
@@ -386,17 +405,22 @@ def cmd_pkg_list(args: argparse.Namespace) -> int:
 def _scan_packages(pipeline: Pipeline, watch: PkgWatch, args: argparse.Namespace) -> dict[str, Any]:
     """Diff the inventory and turn the findings into ``pkg.event`` rows.
 
-    Returns the scan summary.  Only *news* becomes events - a new install, a
-    package that now matches the OSV mirror, or a removal - so a steady-state
-    scan of an unchanged host writes nothing.  The first scan on a host is a
-    baseline: it records the inventory and stays silent, because "everything was
-    installed since the previous scan" is true of every package on a fresh
-    install.
+    Returns the scan summary.  Only *news* becomes events: a new install (or a
+    package that came back after a removal) and a package that vanished.  The
+    first scan on a host is a baseline - it records the inventory and stays
+    silent, because "everything was installed since the previous scan" is true
+    of every package on a fresh install.
+
+    A package that merely *stays* installed and vulnerable is deliberately not
+    re-emitted: that would be one repeat alert per poll, and there is no
+    per-package advisory state yet to tell "newly vulnerable" from "still
+    vulnerable" (P1).  ``pkg-list``'s report covers that case.
     """
     snapshot = read_dpkg_status(args.dpkg_status)
     baseline = not pipeline.store.packages()
     changes = watch.scan(snapshot)
     removed = watch.diff_removed(snapshot)
+    news = [change for change in changes if change.action != "seen"] + removed
     scan: dict[str, Any] = {
         "scanned": len(snapshot),
         "changes": len(changes),
@@ -407,18 +431,11 @@ def _scan_packages(pipeline: Pipeline, watch: PkgWatch, args: argparse.Namespace
     }
     if baseline:
         return scan
-    # ``seen`` means "already known and nothing new to say about it".  Only new
-    # arrivals (``install``, which includes a package that came back) and
-    # departures are news.  A package that merely *stays* installed and
-    # vulnerable is reported by ``vulnerable()``; re-emitting it on every scan
-    # would be one repeat alert per poll, and there is no per-package advisory
-    # state to tell "newly vulnerable" from "still vulnerable" (P1).
-    interesting = [change for change in changes if change.action != "seen"] + removed
     pipeline.apply_storage_policy()
-    for change in interesting:
+    for change in news:
         pipeline.process(change.as_event(utcnow_iso(), pipeline.host))
     pipeline.finish()
-    scan["events"] = len(interesting)
+    scan["events"] = len(news)
     scan["alerts"] = pipeline.stats.alerts
     return scan
 
