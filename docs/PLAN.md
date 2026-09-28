@@ -244,6 +244,14 @@ of them decorative. `--scan` now runs its findings through the pipeline
 baseline that stays silent - otherwise a fresh install alerts on the entire
 operating system it came with. `test_pkg_scan_*` covers both halves.
 
+Wiring the scanner up turned up a second, nastier bug in the same command:
+`read_dpkg_status` returns `[]` for a missing or unreadable file, and the diff
+read that as "none of the stored packages are installed any more" - a failed
+`open()` on `/var/lib/dpkg/status` wrote hundreds of removal events into the
+audit trail, i.e. false history.  An empty inventory with a non-empty store is
+now a hard error: the scan changes nothing and exits 1, because a scan is what
+a timer runs and "file not readable" must not look like a clean pass.
+
 The same check was run on `file.verdict`/`yara`: there is no YARA scanner in the
 repo either, but those fields are an *input* contract (documented in
 `schema/event.schema.json`, exercised by the shipped capture), not an internal
@@ -303,6 +311,10 @@ path the code forgets to call. They stay, and README now documents that a
   `packages` row keeps a version, not the advisory set that matched it.  Today
   that is why a rescan of an unchanged host is silent instead of repeating an
   alert per poll; per-package advisory state removes the compromise.
+* Removal inference trusts the snapshot completely: a *partially* read dpkg
+  database (truncated file, a parse that stops early) still reads as a mass
+  removal.  Only the empty case is guarded; a size heuristic or a checksum of
+  the inventory is the real fix.
 * Windows artefacts in the rules (`cmd.exe`, `powershell.exe`) imply support
   that does not exist.  README says Linux-only; the rules should carry the same
   note so nobody deploys them expecting Windows coverage.

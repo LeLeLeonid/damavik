@@ -391,6 +391,39 @@ def test_pkg_scan_is_a_silent_baseline_then_emits_news(cli, capsys, tmp_path):
     assert third["events"] == 0, third
 
 
+def test_pkg_scan_refuses_an_empty_inventory(cli, capsys, tmp_path):
+    """A dpkg file that cannot be read is not a host that uninstalled everything.
+
+    `read_dpkg_status` returns [] for a missing path, and "every stored package
+    is absent from this snapshot" then means hundreds of removal events written
+    into the audit trail - false history caused by a failed open.  The scan says
+    so and exits non-zero instead.
+    """
+    snapshot = tmp_path / "status"
+    snapshot.write_text(
+        "Package: libfoo\nStatus: install ok installed\nVersion: 1.2.3\n", encoding="utf-8"
+    )
+    cli("pkg-list", "--scan", "--dpkg-status", str(snapshot), "--osv-dir", OSV_DIR, "--json")
+    capsys.readouterr()
+
+    missing = tmp_path / "unmounted" / "status"
+    cli(
+        "pkg-list",
+        "--scan",
+        "--dpkg-status",
+        str(missing),
+        "--osv-dir",
+        OSV_DIR,
+        "--json",
+        expect=1,
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["scan"]["unavailable"] is True
+    assert payload["scan"]["removed"] == 0 and payload["scan"]["events"] == 0
+    assert payload["packages"], "the stored inventory must survive a failed read"
+    assert all(pkg["removed"] == 0 for pkg in payload["packages"])
+
+
 def test_pkg_scan_stores_and_journals_what_it_finds(cli, capsys, tmp_path):
     """The scanner writes through the pipeline: index, journal, alerts."""
     snapshot = tmp_path / "status"

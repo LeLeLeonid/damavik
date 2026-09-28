@@ -61,7 +61,7 @@ how the units pin their paths (`file < environment < command line`):
 | `flows` | aggregated connections, `--pid` to filter |
 | `top-risks` | highest-scored events |
 | `tail` | live journal stream, `--alerts-only` |
-| `pkg-list` | package inventory; `--scan` diffs against stored state and records new installs, removals and CVE hits as events |
+| `pkg-list` | package inventory; `--scan` diffs against stored state and records new installs, removals and CVE hits as events (exit 1 if the inventory cannot be read) |
 | `osv-sync` | load a local OSV mirror into the index |
 | `status` | counts, config path, rule health |
 | `verify` | journal integrity; exit 2 names the first bad line |

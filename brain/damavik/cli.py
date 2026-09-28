@@ -359,7 +359,11 @@ def _watcher(cfg: Config, store: Any, args: argparse.Namespace) -> PkgWatch:
 
 
 def cmd_pkg_list(args: argparse.Namespace) -> int:
-    """Report the inventory; ``--scan`` first diffs it and records the news."""
+    """Report the inventory; ``--scan`` first diffs it and records the news.
+
+    Exit code is 1 when the scan could not read an inventory at all: a scan is
+    what a timer runs, and "no snapshot" must not look like a clean pass.
+    """
     cfg = _config(args)
     scan: dict[str, Any] | None = None
     if args.scan:
@@ -371,6 +375,12 @@ def cmd_pkg_list(args: argparse.Namespace) -> int:
             scan = _scan_packages(pipeline, watch, args)
             packages = pipeline.store.packages(manager=args.manager)
             vulnerable = watch.vulnerable()
+        if scan.get("unavailable"):
+            print(
+                f"warning: {args.dpkg_status} yielded no packages - the inventory "
+                "was not read, nothing changed",
+                file=sys.stderr,
+            )
     else:
         store = Store(cfg.db_path())
         try:
@@ -378,20 +388,21 @@ def cmd_pkg_list(args: argparse.Namespace) -> int:
             vulnerable = _watcher(cfg, store, args).vulnerable()
         finally:
             store.close()
+    unreadable = bool(scan and scan.get("unavailable"))
     if args.json:
         print(
             json.dumps(
                 {"scan": scan, "packages": packages, "vulnerable": vulnerable}, sort_keys=True
             )
         )
-        return 0
+        return 1 if unreadable else 0
     if scan:
         baseline = " (baseline: recorded, nothing to report)" if scan["baseline"] else ""
         print(
             f"scanned {scan['scanned']} packages, {scan['changes']} changes, "
             f"{scan['removed']} removed{baseline}"
         )
-        if not scan["baseline"]:
+        if not scan["baseline"] and not scan["unavailable"]:
             print(f"  {scan['events']} new events, {scan['alerts']} alerts")
     print(f"{len(packages)} packages tracked, {len(vulnerable)} with a known CVE")
     for item in vulnerable[: args.limit]:
@@ -399,7 +410,7 @@ def cmd_pkg_list(args: argparse.Namespace) -> int:
             f"  {item['severity']:8s} {item['manager']}:{item['name']} {item['version']}"
             f"  -> {', '.join(item['cves'][:4])}"
         )
-    return 0
+    return 1 if unreadable else 0
 
 
 def _scan_packages(pipeline: Pipeline, watch: PkgWatch, args: argparse.Namespace) -> dict[str, Any]:
@@ -417,19 +428,30 @@ def _scan_packages(pipeline: Pipeline, watch: PkgWatch, args: argparse.Namespace
     vulnerable" (P1).  ``pkg-list``'s report covers that case.
     """
     snapshot = read_dpkg_status(args.dpkg_status)
-    baseline = not pipeline.store.packages()
+    known = pipeline.store.packages()
+    scan: dict[str, Any] = {
+        "scanned": len(snapshot),
+        "changes": 0,
+        "removed": 0,
+        "baseline": not known,
+        "events": 0,
+        "alerts": 0,
+        "unavailable": False,
+    }
+    if not snapshot and known:
+        # A missing or unreadable dpkg database reads as "zero packages", which
+        # the diff would faithfully report as *every* package having been
+        # removed - hundreds of false removal events written into the audit
+        # trail because a file could not be opened.  An empty inventory is a
+        # read failure, never a fleet uninstall.
+        scan["unavailable"] = True
+        return scan
     changes = watch.scan(snapshot)
     removed = watch.diff_removed(snapshot)
     news = [change for change in changes if change.action != "seen"] + removed
-    scan: dict[str, Any] = {
-        "scanned": len(snapshot),
-        "changes": len(changes),
-        "removed": len(removed),
-        "baseline": baseline,
-        "events": 0,
-        "alerts": 0,
-    }
-    if baseline:
+    scan["changes"] = len(changes)
+    scan["removed"] = len(removed)
+    if scan["baseline"]:
         return scan
     pipeline.apply_storage_policy()
     for change in news:
