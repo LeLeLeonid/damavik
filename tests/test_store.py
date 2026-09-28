@@ -136,7 +136,6 @@ def test_first_seen_counts(store):
     assert first is False and count == 2
     assert store.first_seen("hash", "abc")["count"] == 2
     assert store.first_seen("hash", "nope") is None
-    assert store.rarest(limit=1)[0]["key"] == "hash:abc"
 
 
 def test_package_lifecycle(store):
@@ -161,9 +160,8 @@ def test_cve_rows(store):
             "modified": TS,
         }
     )
-    rows = store.cves_for("Debian:12", "libfoo")
-    assert rows[0]["fixed"] == "1.2.4"
-    assert store.cves_for("Debian:12", "libbar") == []
+    assert store.summary()["cves"] == 1
+    assert store.summary()["packages_with_cve"] == 1
 
 
 def test_intel_cache_expires(store):

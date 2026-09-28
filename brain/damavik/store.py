@@ -25,7 +25,6 @@ import os
 import sqlite3
 import threading
 import time
-from collections.abc import Iterable, Sequence
 from typing import Any
 
 from . import SCHEMA_VERSION
@@ -361,6 +360,25 @@ class Store:
         event["tags"] = json.loads(row["tags"] or "[]")
         return event
 
+    def top_events(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        """Highest-scored events, newest first on ties (``top-risks``)."""
+        rows = self.conn.execute(
+            "SELECT * FROM events ORDER BY score DESC, ts_ms DESC, id DESC LIMIT ?",
+            (int(limit),),
+        ).fetchall()
+        return [self._row_to_event(row) for row in rows]
+
+    def events_since(self, row_id: int, *, limit: int = 200) -> list[tuple[int, dict[str, Any]]]:
+        """Events inserted after ``row_id``, oldest first (``tail``).
+
+        Keyed on the autoincrement rowid, not on ``ts``: two events can share a
+        timestamp, and a stream must not skip or repeat one.
+        """
+        rows = self.conn.execute(
+            "SELECT * FROM events WHERE id > ? ORDER BY id LIMIT ?", (int(row_id), int(limit))
+        ).fetchall()
+        return [(int(row["id"]), self._row_to_event(row)) for row in rows]
+
     def event_by_id(self, eid: str) -> dict[str, Any] | None:
         row = self.conn.execute("SELECT * FROM events WHERE eid=?", (eid,)).fetchone()
         return self._row_to_event(row) if row else None
@@ -576,15 +594,6 @@ class Store:
         ).fetchone()
         return dict(row) if row else None
 
-    def rarest(self, limit: int = 20) -> list[dict[str, Any]]:
-        # Ordering is by count, so deferred counters have to land first or the
-        # "rarest" answer is wrong.
-        self.flush_first_seen()
-        rows = self.conn.execute(
-            "SELECT * FROM first_seen ORDER BY count ASC, last_ts DESC LIMIT ?", (int(limit),)
-        ).fetchall()
-        return [dict(row) for row in rows]
-
     # -- packages ----------------------------------------------------------
     def upsert_package(
         self,
@@ -653,12 +662,6 @@ class Store:
                     row.get("modified"),
                 ),
             )
-
-    def cves_for(self, ecosystem: str, package: str) -> list[dict[str, Any]]:
-        rows = self.conn.execute(
-            "SELECT * FROM cves WHERE ecosystem=? AND package=?", (ecosystem, package)
-        ).fetchall()
-        return [dict(row) for row in rows]
 
     # -- intel cache -------------------------------------------------------
     def cache_put(
@@ -777,8 +780,8 @@ class Store:
         return {
             "schema_version": self.get_meta("schema_version"),
             "host": self.get_meta("host_id"),
-            "events": one("SELECT COUNT(*) FROM events"),
-            "alerts": one("SELECT COUNT(*) FROM alerts"),
+            "events": self.count_events(),
+            "alerts": self.count_alerts(),
             "open_alerts": one("SELECT COUNT(*) FROM alerts WHERE status='open'"),
             "packages": one("SELECT COUNT(*) FROM packages WHERE removed=0"),
             "packages_with_cve": one("SELECT COUNT(DISTINCT package) FROM cves"),
@@ -822,14 +825,3 @@ class Store:
                     conn.close()
             self._connections.clear()
         self._local = threading.local()
-
-    def bulk_insert_events(self, events: Iterable[dict[str, Any]]) -> int:
-        total = 0
-        for event in events:
-            self.insert_event(event)
-            total += 1
-        return total
-
-    def executemany(self, sql: str, rows: Sequence[Sequence[Any]]) -> None:
-        with self._lock:
-            self.conn.executemany(sql, rows)

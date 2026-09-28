@@ -2,12 +2,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """pkgwatch - software inventory, new-arrival detection, CVE matching.
 
-Sources, in preference order:
-
-1. ``osquery`` scheduled queries (``deb_packages`` / ``rpm_packages`` /
-   ``programs``) streamed in as ``pkg.event`` rows - the documented path.
-2. Direct parsing of ``/var/lib/dpkg/status`` so the module is testable and
-   usable on a box without osquery (``damavik pkg-scan``).
+Reads the local package database directly: ``/var/lib/dpkg/status`` today
+(``damavik pkg-list``, and ``--scan`` to diff against the ``packages`` table
+and match the local OSV mirror).  An ``rpm``/``apk`` reader is P1 work, and an
+osquery sidecar that feeds ``pkg.event`` rows is P1 as well - it needs a
+consumer for its differential output, which does not exist yet.
 
 State lives in the ``packages`` table: first-seen timestamp, last-seen
 timestamp and a ``removed`` flag.  A package that reappears after being absent
@@ -157,7 +156,14 @@ class PkgWatch:
     def scan(
         self, packages: Iterable[dict[str, str]], *, ts: str | None = None
     ) -> list[PackageChange]:
-        """Diff an inventory snapshot against stored state; emit pkg events."""
+        """Diff an inventory snapshot against stored state.
+
+        Returns one :class:`PackageChange` per package: ``install`` for a
+        package this host has not seen before, ``seen`` for one that was already
+        known.  Callers decide which of those deserve an event - see
+        ``cli._scan_packages``.  Advisory matches are attached either way
+        (``cves``/``severity``), so the report and the rule see the same facts.
+        """
         ts = ts or utcnow_iso()
         changes: list[PackageChange] = []
         for pkg in packages:
@@ -186,8 +192,6 @@ class PkgWatch:
                     key=lambda value: order.get(value, 0),
                 )
             action = "install" if is_new else "seen"
-            if not is_new and cves:
-                action = "cve"
             changes.append(
                 PackageChange(
                     manager=manager,

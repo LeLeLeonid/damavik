@@ -28,7 +28,7 @@ Everything else below is either hygiene or roadmap.
 | Brain (`brain/damavik`, stdlib only) | 20 modules: normalize, enrich, 20-rule Sigma-subset engine, scorer, hash-chained journal, SQLite index, alerts with dedup/cooldown, JSON API + zero-dependency dashboard |
 | Sensor | `sensor-py` polls `/proc` (exec + flows). The eBPF sensor does not exist yet; DNS needs `--dns-tail` |
 | Rules | 20 rules across process/file/network/DNS/persistence/supply-chain, each with TP+FP fixtures |
-| Packaging | POSIX `install.sh` with DRY_RUN, two hardened systemd units, osquery differential pack |
+| Packaging | POSIX `install.sh` with DRY_RUN, two hardened systemd units, a `pip install` that works |
 | Gates | ruff lint + format, pytest, end-to-end selftest, perf gate (1 ms/event), REUSE licence check |
 
 A coherent P0 product: a local-first, dependency-free host monitor whose value
@@ -204,7 +204,7 @@ deleted, not never written` (exit 2) otherwise.
 
 | Gate | Before | After |
 |---|---|---|
-| `pytest tests/ -q` | 25 failed, 351 passed | 417 passed in ~16 s |
+| `pytest tests/ -q` | 25 failed, 351 passed | 418 passed in ~16 s |
 | `ruff check brain tests` | 89 errors | clean |
 | `ruff format --check` | 32 files unformatted | clean |
 | `pip install .` + `damavik selftest` outside the checkout | `DistutilsOptionError`, then 0 rules | installs, `selftest OK` |
@@ -212,13 +212,44 @@ deleted, not never written` (exit 2) otherwise.
 | `damavik demo` | "27 alerts (showing 0)" | 20 ranked alerts, each with reasons |
 | `damavik selftest` | passed while proving nothing | asserts stored evidence |
 | idle-box live run | 2 false-positive alerts | 0 alerts, evidence still scored |
-| `reuse lint` (CI licensing job) | not compliant: no `LICENSES/`, one invalid expression | 105/105 files, compliant |
+| `reuse lint` (CI licensing job) | not compliant: no `LICENSES/`, one invalid expression | 104/104 files, compliant |
 
 Also fixed: `validate`'s dead `accepted` counter (a clean file printed "0 ok"),
 README's stale test count, `sensorpy`'s docstring pointing at a command that
-does not exist (`pkg-scan`), and the licensing gate (`LICENSES/GPL-3.0-only.txt`
-plus a `.license` sidecar for the osquery pack, whose JSON `_comment` header
-REUSE parsed as the invalid expression `GPL-3.0-only",`).
+does not exist (`pkg-scan`), and the licensing gate (missing
+`LICENSES/GPL-3.0-only.txt`).
+
+### 2.7 Second pass: the code that did nothing, and one bug it was hiding
+
+A read-through of every module with `vulture`, an AST scan for symbols with no
+caller outside their own module, and a caller-by-caller grep of each public
+method. Two kinds of finding, and the second kind is why this section exists.
+
+**Deleted outright** - dead config keys, dead methods, dead helpers:
+
+| Removed | Why it was dead |
+|---|---|
+| `sensor.yara`, `osquery.*`, `intel.abuseipdb/otx/vt`, `alerts.webhook` | accepted by the config schema (and in the example YAML, and in `getattr`-style option bags) with no code behind any of them |
+| `osquery/` pack + its `.license` sidecar | nothing consumed the log lines; the pack configured a source that does not exist yet |
+| `normalize.now_event`, `read_file`; `Store.bulk_insert_events`/`executemany`, `rarest`, `cves_for`; `Scorer.seen_tuples`; `RuleSet._fired`; `AlertSink.notified`; `IntelEnricher.lookups`; `dash.MAX_BODY`; `versions.order_key`; `serve_in_thread` | no caller outside their own tests (or at all); `serve_in_thread` lives in `tests/test_dash.py` now, where it is used |
+| `cmd_tail`'s and `cmd_top_risks`'s raw SQL | replaced by `Store.events_since`/`Store.top_events` - one definition of "the newest events" instead of two queries and a `store.conn` reach-through |
+
+**Found by the same walk, and fixed instead of deleted**: `PackageChange.as_event`
+built the `pkg.event` rows that `DMK-V-001` (known CVE) and `DMK-V-002` (new
+network-capable package) select on - and no code path ever called it. `pkg-list
+--scan` diffed the inventory, printed a count and dropped the findings, so on a
+live host the two package rules could never fire: twenty rules in `status`, two
+of them decorative. `--scan` now runs its findings through the pipeline
+(index, journal, alerts, `verify`), with the first scan on a host treated as a
+baseline that stays silent - otherwise a fresh install alerts on the entire
+operating system it came with. `test_pkg_scan_*` covers both halves.
+
+The same check was run on `file.verdict`/`yara`: there is no YARA scanner in the
+repo either, but those fields are an *input* contract (documented in
+`schema/event.schema.json`, exercised by the shipped capture), not an internal
+path the code forgets to call. They stay, and README now documents that a
+`yara` tag list is where an external scanner reports findings.
+
 
 ## 3. P1 — next, in this order
 
@@ -246,25 +277,35 @@ REUSE parsed as the invalid expression `GPL-3.0-only",`).
 6. **Correlation state on disk.**  Windows live in memory, so a brain restart
    forgets a ten-minute burst.
 7. **OSV autosync.**  Loader, matcher and `cves` table exist; nothing fetches or
-   schedules a mirror.
+   schedules a mirror, and the default mirror directory is outside what the
+   packaged unit may write.
+8. **osquery/rpm ingestion.**  The dpkg reader is the only package source.  An
+   osquery differential consumer (autoruns, listeners, rpm/apk inventories)
+   needs a real mapping into `sys.event`/`pkg.event`, which does not exist yet;
+   shipping the pack without the consumer was worse than not shipping it.
 
 ## 4. P2 — hygiene, do while touching the area
 
 * `Journal.sync()` guards against `self.journal is None`, which cannot happen.
 * `Store` caches are keyed by PID/path and only cleared at a size cap; fine
   today, worth a TTL once the brain runs for weeks.
-* `alerts.webhook` is in the config schema and in `AlertSink`, but nothing wires
-  it: implement it behind the same `offline` switch, or drop the key.
 * `intel.osv_mirror.dir` defaults to `~/.local/share/damavik/osv`, which the
-  packaged unit cannot write (`ProtectHome=yes`).  The installed config should
-  point it under `$DAMAVIK_STATE_DIR`, as `alerts.path` already does.
+  packaged unit cannot read (`ProtectHome=yes`) - and `pkg-list --scan` under
+  the shipped unit therefore finds no advisories.  The mirror has to follow
+  `$DAMAVIK_STATE_DIR` the way `alerts.path` already does, or the scan has to
+  report "mirror not loaded" loudly instead of as `0` matches.
 * `packaging/install.sh` copies the tree and writes a launcher; a `pip install .`
   is now a working alternative, so the two paths should share one definition of
   "installed" instead of drifting apart again.
 * `rule_cases.json` fixtures carry enrichment fields by hand (`meta.is_local`).
   A small fixture builder that runs the enricher would remove the duplication.
-* Windows artefacts (`cmd.exe`, `powershell.exe`, YARA tags) imply support that
-  does not exist; state "Linux only" until it does.
+* `pkg-list --scan` cannot tell "still vulnerable" from "newly vulnerable" - the
+  `packages` row keeps a version, not the advisory set that matched it.  Today
+  that is why a rescan of an unchanged host is silent instead of repeating an
+  alert per poll; per-package advisory state removes the compromise.
+* Windows artefacts in the rules (`cmd.exe`, `powershell.exe`) imply support
+  that does not exist.  README says Linux-only; the rules should carry the same
+  note so nobody deploys them expecting Windows coverage.
 
 ## 5. P3 — explicitly out of scope
 
@@ -276,8 +317,8 @@ design; anything that breaks those two sentences is a different product.
 
 Commands run on the checkout after the fixes, not claims:
 
-* `pytest tests/ -q` → 417 passed in ~16 s, no network, no root.
-* `reuse lint` → compliant (105/105 files), the same version CI runs.
+* `pytest tests/ -q` → 418 passed in ~16 s, no network, no root.
+* `reuse lint` → compliant (104/104 files), the same version CI runs.
 * Every CI gate re-run locally as one pass: `ruff check`, `ruff format --check,
   pytest`, `selftest`, the `demo` smoke check, `bench --events 5000 --gate`,
   the rule/schema/privacy jobs and `reuse lint` - 12/12 pass.
@@ -302,6 +343,9 @@ Commands run on the checkout after the fixes, not claims:
   box, 125 events stored, `verify` OK.
 * Dashboard over HTTP: index/JS/CSS served, every `/api/*` route answered, 401
   without a token, 404s for unknown routes, `demo` data renders in every view.
+* `pkg-list --scan` on a live `/var/lib/dpkg/status`: first scan is a silent
+  baseline; adding a network-capable package produces an event, a score and a
+  `DMK-V-002` alert; a third scan of the unchanged host produces nothing.
 * Regression tests added for each P0: retention vs. replayed captures
   (`test_pipeline`), event-clock correlation and bounded windows (`test_rules`),
   rebase/expand (`test_replay`), stale-capture reporting and the stored-evidence

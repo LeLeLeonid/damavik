@@ -48,11 +48,9 @@ class AlertSink:
     journal: Any = None
     path: str | None = None
     notify: bool = False
-    webhook: str | None = None
     cooldown_s: float = 300.0
     min_score: float = 45.0
     _fh: Any = None
-    notified: int = 0
 
     def close(self) -> None:
         if self._fh is not None:
@@ -97,7 +95,6 @@ class AlertSink:
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
-                self.notified += 1
         except (OSError, subprocess.SubprocessError):
             pass
 

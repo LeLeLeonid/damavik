@@ -18,12 +18,13 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
-from .schema import EVENT_TYPES, event_id, to_iso, utcnow_iso, validate_event
+from .schema import EVENT_TYPES, event_id, to_iso, validate_event
 
 DEFAULT_MAX_EVENT_BYTES = 65536
 
 #: Sensor field names accepted as aliases, mapped onto canonical paths.  This is
-#: what makes the Sysmon / osquery / eBPF / proc-poller sources converge.
+#: what lets a Sysmon-ish or eBPF-ish feed reach the same rules as our own
+#: ``sensor`` without anyone rewriting the capture first.
 _ALIASES: dict[str, str] = {
     "process_id": "proc.pid",
     "pid": "proc.pid",
@@ -192,20 +193,13 @@ def iter_jsonl(
         yield event
 
 
-def read_file(
-    path: str,
-    *,
-    host: str | None = None,
-    max_bytes: int = DEFAULT_MAX_EVENT_BYTES,
-    stats: IngestStats | None = None,
-) -> Iterator[dict[str, Any]]:
+def read_lines(path: str) -> Iterator[str]:
+    """Yield the raw lines of a capture, one place knowing how to open one.
+
+    A capture is read as *text* rather than as events on purpose: the pipeline
+    may need to rewrite timestamps first (``replay.rebase``), which is a line
+    transform, and re-serialising an event to do that would lose fields the
+    canonical schema does not name.
+    """
     with open(os.path.expanduser(path), encoding="utf-8", errors="replace") as handle:
-        yield from iter_jsonl(handle, host=host, max_bytes=max_bytes, stats=stats)
-
-
-def now_event(etype: str, **fields: Any) -> dict[str, Any]:
-    """Build a minimal canonical event (used by tests and the demo capture)."""
-    event: dict[str, Any] = {"ts": utcnow_iso(), "type": etype, "tags": [], "score": 0.0}
-    event.update(fields)
-    event.setdefault("id", event_id(event))
-    return event
+        yield from handle

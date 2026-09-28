@@ -9,7 +9,6 @@ an :mod:`damavik.intel` plugin that the configuration explicitly enabled.
 
 from __future__ import annotations
 
-import os
 import time
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
@@ -21,7 +20,7 @@ from .config import Config
 from .enrich import ContextEnricher, IntelEnricher
 from .intel import providers_for
 from .journal import Journal
-from .normalize import IngestStats, iter_jsonl
+from .normalize import IngestStats, iter_jsonl, read_lines
 from .replay import rebase as rebase_lines
 from .rules import RuleSet, load_rules_dir
 from .schema import iso_to_ms, utcnow_iso
@@ -164,9 +163,10 @@ class Pipeline:
         *synthetic* capture - ``demo``, ``selftest``, ``bench`` - turns it on, so
         a capture cannot rot as the calendar moves.
         """
-        with open(os.path.expanduser(path), encoding="utf-8", errors="replace") as handle:
-            stream: Iterable[str] = rebase_lines(handle) if rebase else handle
-            return self.run(stream, limit=limit)
+        stream: Iterable[str] = read_lines(path)
+        if rebase:
+            stream = rebase_lines(stream)
+        return self.run(stream, limit=limit)
 
     def run(self, stream: Iterable[str], *, limit: int | None = None) -> PipelineStats:
         self.apply_storage_policy()

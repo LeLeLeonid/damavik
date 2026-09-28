@@ -7,8 +7,9 @@ every process execution, every network flow, every DNS query, every installed
 package - scored locally, never phoning home.
 
 This package is the "brain".  It is deliberately dependency-free: the Python
-standard library only.  Optional integrations (PyYAML, yara-x) are imported
-lazily and degrade gracefully when absent.
+standard library only, no runtime packages, no network unless a cloud provider
+is turned on explicitly.  Even the rule loader is ours (``miniyaml``), because
+"pip install PyYAML" is exactly the dependency this product exists to avoid.
 """
 
 from __future__ import annotations

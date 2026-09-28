@@ -85,8 +85,15 @@ def test_dashboard_cannot_bind_off_loopback():
     assert any("loopback" in problem for problem in validate({"dashboard": {"bind": "10.0.0.1"}}))
 
 
-def test_no_webhook_is_configured_by_default():
-    assert Config().alerts["webhook"] is None
+def test_alerts_have_no_outbound_transport():
+    """No webhook, no HTTP client: an alert can only be written locally.
+
+    ``alerts.webhook`` used to exist in the schema without any code behind it;
+    asserting its absence keeps a future implementation from landing silently.
+    """
+    cfg = Config()
+    assert "webhook" not in cfg.alerts
+    assert cfg.alerts["path"] and not str(cfg.alerts["path"]).startswith("http")
 
 
 def test_static_ui_has_no_external_references(repo_root):

@@ -17,13 +17,7 @@ sensor:
   flows: true
   dns: true              # requires the eBPF sensor; sensor-py cannot see DNS
   exec_hash: true        # SHA-256 every executed binary (skipped above 64 MiB)
-  yara: true             # scan at exec time, inside the P1 budget
   poll_interval_s: 2.0   # sensor-py only; eBPF is event-driven
-
-osquery:
-  enabled: false         # optional sidecar; see osquery/packs/damavik.conf
-  interval_s: 60
-  pack: osquery/packs/damavik.conf
 
 # Every provider below is opt-in.  Nothing here talks to the network unless you
 # flip `enabled` yourself, and `offline: true` overrides all of them.
@@ -36,15 +30,6 @@ intel:
     enabled: false       # keyless: sends SHA-256 hashes, never file contents
   urlhaus:
     enabled: false       # keyless: sends domains/URLs
-  abuseipdb:
-    enabled: false       # needs a key
-    key_env: ABUSEIPDB_KEY
-  otx:
-    enabled: false
-    key_env: OTX_KEY
-  vt:
-    enabled: false       # last resort: tight free-tier quota, cached hard
-    key_env: VT_KEY
 
 dashboard:
   enabled: true
@@ -55,7 +40,6 @@ dashboard:
 alerts:
   path: alerts.log       # relative paths live under state_dir
   notify: true           # notify-send on Linux; never blocks, never raises
-  webhook: null          # optional; if set, it is the only outbound HTTP
   cooldown_s: 300        # one alert per (rule, indicator) per cooldown window
   min_score: 45.0        # below this, rule hits still log but do not alert
 

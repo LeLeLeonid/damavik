@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ["dpkg_compare", "generic_compare", "compare", "order_key"]
+__all__ = ["dpkg_compare", "generic_compare", "compare"]
 
 _PRERELEASE = {"dev": 0, "alpha": 1, "pre": 2, "beta": 3, "rc": 4}
 _PRERELEASE_SPLIT = re.compile(r"[.\-]")
@@ -183,10 +183,3 @@ def compare(left: str, right: str, ecosystem: str = "") -> int:
     if name.startswith(("debian", "ubuntu")):
         return dpkg_compare(left, right)
     return generic_compare(left, right)
-
-
-def order_key(version: str, ecosystem: str = ""):
-    """``functools.cmp_to_key`` wrapper for sorting a version list."""
-    import functools
-
-    return functools.cmp_to_key(lambda x, y: compare(x, y, ecosystem))(version)

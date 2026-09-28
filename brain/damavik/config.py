@@ -20,10 +20,10 @@ from .miniyaml import YamlError, loads
 
 CONFIG_FILENAME = "damavik.yaml"
 DEFAULT_CONFIG_PATHS = (
-    "./damavik.yaml",
-    "./config/damavik.yaml",
-    "~/.config/damavik/damavik.yaml",
-    "/etc/damavik/damavik.yaml",
+    f"./{CONFIG_FILENAME}",
+    f"./config/{CONFIG_FILENAME}",
+    f"~/.config/damavik/{CONFIG_FILENAME}",
+    f"/etc/damavik/{CONFIG_FILENAME}",
 )
 
 #: Every key we know about, as ``"section.key"``.  Kept flat and explicit so the
@@ -37,29 +37,18 @@ KNOWN_KEYS = frozenset(
         "sensor.flows",
         "sensor.dns",
         "sensor.exec_hash",
-        "sensor.yara",
         "sensor.poll_interval_s",
-        "osquery.enabled",
-        "osquery.interval_s",
-        "osquery.pack",
         "intel.osv_mirror.enabled",
         "intel.osv_mirror.sync",
         "intel.osv_mirror.dir",
         "intel.bazaar.enabled",
         "intel.urlhaus.enabled",
-        "intel.abuseipdb.enabled",
-        "intel.abuseipdb.key_env",
-        "intel.otx.enabled",
-        "intel.otx.key_env",
-        "intel.vt.enabled",
-        "intel.vt.key_env",
         "dashboard.enabled",
         "dashboard.bind",
         "dashboard.port",
         "dashboard.token_env",
         "alerts.path",
         "alerts.notify",
-        "alerts.webhook",
         "alerts.cooldown_s",
         "alerts.min_score",
         "limits.max_event_bytes",
@@ -91,27 +80,16 @@ class Config:
             "flows": True,
             "dns": True,
             "exec_hash": True,
-            "yara": True,
             "poll_interval_s": 2.0,
-        }
-    )
-    osquery: dict[str, Any] = field(
-        default_factory=lambda: {
-            "enabled": False,
-            "interval_s": 60,
-            "pack": "osquery/packs/damavik.conf",
         }
     )
     intel: dict[str, Any] = field(
         default_factory=lambda: {
-            # Keyless providers are still opt-in: the MVP ships with every
-            # network path off so `--offline` is the *default*, not the escape.
+            # Both providers are opt-in: the MVP ships with every network path
+            # off, so `--offline` is the *default*, not the escape hatch.
             "osv_mirror": {"enabled": True, "sync": "weekly", "dir": "~/.local/share/damavik/osv"},
             "bazaar": {"enabled": False},
             "urlhaus": {"enabled": False},
-            "abuseipdb": {"enabled": False, "key_env": "ABUSEIPDB_KEY"},
-            "otx": {"enabled": False, "key_env": "OTX_KEY"},
-            "vt": {"enabled": False, "key_env": "VT_KEY"},
         }
     )
     dashboard: dict[str, Any] = field(
@@ -126,7 +104,6 @@ class Config:
         default_factory=lambda: {
             "path": "alerts.log",
             "notify": True,
-            "webhook": None,
             "cooldown_s": 300,
             "min_score": 45.0,
         }
@@ -230,12 +207,6 @@ def validate(data: dict[str, Any]) -> list[str]:
         errors.append("dashboard.port: must be an int in 1..65535")
     if "offline" in data and not isinstance(data["offline"], bool):
         errors.append("offline: must be a boolean")
-    for provider, spec in _as_dict(data.get("intel")).items():
-        spec = _as_dict(spec)
-        if spec.get("enabled") and spec.get("key_env") and not os.environ.get(str(spec["key_env"])):
-            errors.append(
-                f"intel.{provider}: enabled but {spec['key_env']} is not set in the environment"
-            )
     return errors
 
 
@@ -251,7 +222,6 @@ def from_dict(data: dict[str, Any], *, source_path: str | None = None) -> Config
             "retention_days": base.retention_days,
             "state_dir": base.state_dir,
             "sensor": base.sensor,
-            "osquery": base.osquery,
             "intel": base.intel,
             "dashboard": base.dashboard,
             "alerts": base.alerts,

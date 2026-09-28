@@ -504,7 +504,6 @@ class RuleSet:
         #: are dropped; nothing that can still fire is ever discarded.
         self.WINDOW_LIMIT = 10000
         self._windows: dict[str, list[tuple[float, str]]] = {}
-        self._fired: set[str] = set()
 
     def __len__(self) -> int:
         return len(self.rules)

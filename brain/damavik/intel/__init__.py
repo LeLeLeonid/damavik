@@ -25,9 +25,12 @@ from .urlhaus import URLhaus  # noqa: F401
 
 
 def providers_for(config: object, store: object | None = None) -> list[Provider]:
-    """Instantiate the providers the configuration actually enabled."""
-    import os
+    """Instantiate the providers the configuration actually enabled.
 
+    Only providers that exist are listed here, so ``enabled_intel()`` and this
+    function cannot disagree: a provider that is off, offline, or not in this
+    table is never created.
+    """
     enabled = getattr(config, "enabled_intel", lambda: {})()
     out: list[Provider] = []
     offline = bool(getattr(config, "offline", False))
@@ -36,11 +39,6 @@ def providers_for(config: object, store: object | None = None) -> list[Provider]
         out.append(MalwareBazaar(store=store, offline=offline, max_bytes=max_bytes))
     if "urlhaus" in enabled:
         out.append(URLhaus(store=store, offline=offline, max_bytes=max_bytes))
-    for name in ("abuseipdb", "otx", "vt"):
-        if name in enabled:  # keyed providers land in P5
-            key_env = str(enabled[name].get("key_env", ""))
-            if key_env and not os.environ.get(key_env):
-                continue
     return out
 
 

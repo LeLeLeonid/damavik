@@ -61,7 +61,7 @@ how the units pin their paths (`file < environment < command line`):
 | `flows` | aggregated connections, `--pid` to filter |
 | `top-risks` | highest-scored events |
 | `tail` | live journal stream, `--alerts-only` |
-| `pkg-list` | package inventory, `--scan` to diff and match CVEs |
+| `pkg-list` | package inventory; `--scan` diffs against stored state and records new installs, removals and CVE hits as events |
 | `osv-sync` | load a local OSV mirror into the index |
 | `status` | counts, config path, rule health |
 | `verify` | journal integrity; exit 2 names the first bad line |
@@ -69,6 +69,27 @@ how the units pin their paths (`file < environment < command line`):
 | `selftest` | end-to-end proof the install works: rules, stored alerts, journal |
 | `bench` | throughput and memory against the budgets, `--gate` for CI |
 | `purge` | delete database, journal and alerts (`--yes`) |
+
+## Feed it something else
+
+`sensor` is the event source that ships with the project, not a requirement.
+Anything that can write JSONL can feed the brain, as long as the lines match
+[`schema/event.schema.json`](schema/event.schema.json):
+
+```sh
+sudo /usr/bin/my-audit-tool | damavik run            # straight into the pipeline
+damavik validate capture.jsonl                       # check first; reports every problem
+damavik run --file capture.jsonl --rebase            # forensic reload on today's clock
+```
+
+`ts`, `host` and `type` are the only required fields; `type` selects which
+context block matters (`proc`, `net`, `dns`, `pkg`, `meta`).  Common sensor
+spellings (`pid`/`process_id`, `image`/`exe`, ...) are aliased onto the canonical
+paths, an unknown `type` is labelled rather than rejected (so a newer sensor
+cannot be dropped by an older brain), and a `file.verdict` event may carry a
+`yara` list of rule names - which is how an external scanner reports findings.
+Anything unparseable is counted and reported, never fatal: `damavik status`
+shows the drop count.
 
 ## How it decides
 
@@ -102,7 +123,7 @@ event and delete every event in the same call, leaving `demo` reporting
 ## Development
 
 ```sh
-python3 -m pytest tests/ -q          # 417 tests, ~16 s, no network, no root
+python3 -m pytest tests/ -q          # 418 tests, ~16 s, no network, no root
 python3 -m damavik.cli bench --gate  # performance budgets
 python3 -m ruff check brain tests && python3 -m ruff format --check brain tests
 ```
@@ -117,9 +138,10 @@ the event and we add it as a regression test before changing the rule.
 ## Status
 
 P0. ~0.5 ms per event through the whole pipeline with 20 rules, ~26 MB
-resident. The Linux eBPF sensor is not built yet — `sensor-py` (reading
-`/proc`) is the current data source and covers `proc.exec` and `net.flow`, not
-DNS. It will not find kernel rootkits or fileless living-off-the-land chains.
+resident. **Linux only**: the eBPF sensor is not built yet, so `sensor-py`
+(reading `/proc`) is the current data source and covers `proc.exec` and
+`net.flow`, not DNS. It will not find kernel rootkits or fileless
+living-off-the-land chains.
 
 ## License
 

@@ -131,9 +131,17 @@ def test_parse_record_needs_an_id():
 
 
 def test_load_into_store(store, mirror):
+    """`osv-sync --index` flattens advisories into the cves table.
+
+    The index is what makes `damavik status` able to report CVE counts without
+    re-reading the mirror; the per-package lookup the dashboard uses goes
+    through ``OsvMirror.match_manager`` against the loaded mirror instead.
+    """
     rows = mirror.load_into_store(store)
     assert rows > 0
-    assert store.cves_for("Debian:12", "libfoo")[0]["fixed"] == "1.2.4"
+    summary = store.summary()
+    assert summary["cves"] == rows
+    assert summary["packages_with_cve"] >= 1
 
 
 def test_zip_loading(tmp_path):

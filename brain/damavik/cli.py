@@ -24,7 +24,7 @@ from .osv import OsvMirror
 from .pipeline import Pipeline
 from .pkgwatch import PkgWatch, read_dpkg_status
 from .rules import load_rules_dir
-from .schema import validate_event
+from .schema import utcnow_iso, validate_event
 from .sensorpy import ProcSensor, tail_dns_log
 from .store import Store
 
@@ -77,69 +77,54 @@ def repo_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-def env_key_for(name: str, env_key: str | None = None) -> str:
-    """Environment variable that overrides where ``name`` is looked up."""
-    if env_key:
-        return env_key
-    stem = os.path.basename(name).split(".")[0]
-    safe = "".join(ch if ch.isalnum() else "_" for ch in stem).strip("_").upper()
-    return f"DAMAVIK_{safe}_DIR"
-
-
 def package_data_dir() -> str:
     """Where a ``pip install`` keeps the vendored rules and fixtures."""
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 
-def data_candidates(name: str, *, env_key: str | None = None) -> list[str]:
+def data_candidates(name: str) -> list[str]:
     """Every place a shipped path may live, most specific first.
 
-    Order: an environment override, the current directory, the checkout root,
-    the copy vendored inside the installed package (``damavik/data/``, which
-    ``pip install`` ships), then ``/usr/share/damavik`` where
-    ``packaging/install.sh`` puts things.  Exposed as a list so tests can pin
-    the order and packaging tests can assert the vendored copy is reachable.
+    The current directory, the checkout root, the copy vendored inside the
+    installed package (``damavik/data/``, which ``pip install`` ships), then
+    ``/usr/share/damavik`` where ``packaging/install.sh`` puts things.
+
+    Overrides are *not* part of this search: ``--rules-dir``/``--fixture`` and
+    the ``DAMAVIK_*`` variables (see ``config.ENV_OVERRIDES``) are applied by
+    the caller, so there is exactly one mechanism per override.
     """
-    env = os.environ.get(env_key_for(name, env_key))
-    candidates = []
-    if env:
-        candidates.append(os.path.expanduser(env))
-    candidates += [
+    return [
         os.path.join(os.getcwd(), name),
         os.path.join(repo_root(), name),
         os.path.join(package_data_dir(), name),
         os.path.join("/usr/share/damavik", name),
     ]
-    return candidates
 
 
-def find_data(name: str, override: str | None = None, *, env_key: str | None = None) -> str:
+def find_data(name: str, override: str | None = None) -> str:
     """Resolve a shipped data path (``rules``, the demo capture) to something real.
 
-    The CWD candidate is returned when nothing exists, so the error message
-    points somewhere the operator can act on; ``data_hint`` explains how to fix
-    it.  See ``data_candidates`` for the search order.
+    ``override`` is taken verbatim - an operator who named a path means it, and
+    a wrong path must be reported as such rather than silently replaced by a
+    default.  Everything else falls back to the first existing entry of
+    :func:`data_candidates`, or, when nothing exists, the current-directory
+    candidate, so the error message points somewhere the operator can act on.
     """
     if override:
         return os.path.expanduser(override)
-    env = os.environ.get(env_key_for(name, env_key))
-    if env:
-        # An explicit environment override is honoured even when it is wrong:
-        # the operator meant that path, and the error message must name it.
-        return os.path.expanduser(env)
-    candidates = data_candidates(name, env_key=env_key)
+    candidates = data_candidates(name)
     for candidate in candidates:
         if os.path.exists(candidate):
             return candidate
     return candidates[0]
 
 
-def data_hint(name: str, env_key: str | None = None) -> str:
-    """One line telling an operator where ``name`` comes from."""
+def data_hint(name: str) -> str:
+    """One line telling an operator where a shipped path comes from."""
     return (
         f"hint: {name} ships with the checkout, with `pip install` and with "
         "`packaging/install.sh` (which installs it under /usr/share/damavik).  "
-        f"Set {env_key_for(name, env_key)} to point at it."
+        "Pass the path explicitly to use your own copy."
     )
 
 
@@ -230,22 +215,24 @@ def cmd_tail(args: argparse.Namespace) -> int:
     last_id = 0
     try:
         while True:
-            rows = store.conn.execute(
-                "SELECT * FROM events WHERE id > ? ORDER BY id LIMIT 200", (last_id,)
-            ).fetchall()
-            for row in rows:
-                last_id = row["id"]
-                event = json.loads(row["raw"])
-                score = float(row["score"])
+            rows = store.events_since(last_id)
+            for row_id, event in rows:
+                last_id = row_id
+                score = float(event.get("score", 0.0))
                 if args.alerts_only and score < float(cfg.alerts.get("min_score", 45)):
                     continue
-                tags = ",".join(json.loads(row["tags"] or "[]"))
-                target = row["exe"] or row["dst"] or row["q"] or ""
+                exe = (event.get("proc") or {}).get("exe") or ""
+                target = (
+                    exe
+                    or (event.get("net") or {}).get("dst")
+                    or (event.get("dns") or {}).get("q")
+                    or ""
+                )
                 _emit(
                     event,
                     args.json,
-                    f"{row['ts']} {row['type']:13s} [{_score_bar(score)}] {score:5.1f} "
-                    f"{target[:60]:60s} {tags}",
+                    f"{event.get('ts')} {str(event.get('type')):13s} [{_score_bar(score)}] "
+                    f"{score:5.1f} {target[:60]:60s} {','.join(event.get('tags') or [])}",
                 )
             if args.once:
                 break
@@ -309,24 +296,24 @@ def cmd_flows(args: argparse.Namespace) -> int:
 def cmd_top_risks(args: argparse.Namespace) -> int:
     cfg = _config(args)
     store = Store(cfg.db_path())
-    rows = store.conn.execute(
-        """SELECT eid, ts, type, exe, dst, q, score, tags FROM events
-           ORDER BY score DESC, ts_ms DESC LIMIT ?""",
-        (int(args.limit),),
-    ).fetchall()
+    events = store.top_events(limit=int(args.limit))
     store.close()
     if args.json:
-        print(json.dumps([dict(row) for row in rows], sort_keys=True, default=str))
+        print(json.dumps(events, sort_keys=True, default=str))
         return 0
-    if not rows:
+    if not events:
         print("(nothing recorded yet)")
         return 0
-    for row in rows:
-        target = row["exe"] or row["dst"] or row["q"] or "-"
+    for event in events:
+        proc = event.get("proc") or {}
+        net = event.get("net") or {}
+        dns = event.get("dns") or {}
+        target = proc.get("exe") or net.get("dst") or dns.get("q") or "-"
+        score = float(event.get("score", 0.0))
         print(
-            f"{row['score']:5.1f} [{_score_bar(float(row['score']), 8)}] {row['ts']} "
-            f"{row['type']:12s} {os.path.basename(str(target))[:44]:44s} "
-            f"{','.join(json.loads(row['tags'] or '[]'))[:40]}"
+            f"{score:5.1f} [{_score_bar(score, 8)}] {event.get('ts')} "
+            f"{str(event.get('type')):12s} {os.path.basename(str(target))[:44]:44s} "
+            f"{','.join(event.get('tags') or [])[:40]}"
         )
     return 0
 
@@ -366,19 +353,15 @@ def _osv_dir(cfg: Config, override: str | None) -> str:
 
 def cmd_pkg_list(args: argparse.Namespace) -> int:
     cfg = _config(args)
-    store = Store(cfg.db_path())
-    mirror = OsvMirror(_osv_dir(cfg, args.osv_dir))
-    mirror.load_dir()
-    watch = PkgWatch(store=store, mirror=mirror, host=cfg.resolved_host_id())
-    scan: dict[str, int] | None = None
-    if args.scan:
-        snapshot = read_dpkg_status(args.dpkg_status)
-        changes = watch.scan(snapshot)
-        removed = watch.diff_removed(snapshot)
-        scan = {"scanned": len(snapshot), "changes": len(changes), "removed": len(removed)}
-    packages = store.packages(manager=args.manager)
-    vulnerable = watch.vulnerable()
-    store.close()
+    with Pipeline(cfg) as pipeline:
+        mirror = OsvMirror(_osv_dir(cfg, args.osv_dir))
+        mirror.load_dir()
+        watch = PkgWatch(store=pipeline.store, mirror=mirror, host=cfg.resolved_host_id())
+        scan: dict[str, Any] | None = None
+        if args.scan:
+            scan = _scan_packages(pipeline, watch, args)
+        packages = pipeline.store.packages(manager=args.manager)
+        vulnerable = watch.vulnerable()
     if args.json:
         print(
             json.dumps(
@@ -398,6 +381,46 @@ def cmd_pkg_list(args: argparse.Namespace) -> int:
             f"  -> {', '.join(item['cves'][:4])}"
         )
     return 0
+
+
+def _scan_packages(pipeline: Pipeline, watch: PkgWatch, args: argparse.Namespace) -> dict[str, Any]:
+    """Diff the inventory and turn the findings into ``pkg.event`` rows.
+
+    Returns the scan summary.  Only *news* becomes events - a new install, a
+    package that now matches the OSV mirror, or a removal - so a steady-state
+    scan of an unchanged host writes nothing.  The first scan on a host is a
+    baseline: it records the inventory and stays silent, because "everything was
+    installed since the previous scan" is true of every package on a fresh
+    install.
+    """
+    snapshot = read_dpkg_status(args.dpkg_status)
+    baseline = not pipeline.store.packages()
+    changes = watch.scan(snapshot)
+    removed = watch.diff_removed(snapshot)
+    scan: dict[str, Any] = {
+        "scanned": len(snapshot),
+        "changes": len(changes),
+        "removed": len(removed),
+        "baseline": baseline,
+        "events": 0,
+        "alerts": 0,
+    }
+    if baseline:
+        return scan
+    # ``seen`` means "already known and nothing new to say about it".  Only new
+    # arrivals (``install``, which includes a package that came back) and
+    # departures are news.  A package that merely *stays* installed and
+    # vulnerable is reported by ``vulnerable()``; re-emitting it on every scan
+    # would be one repeat alert per poll, and there is no per-package advisory
+    # state to tell "newly vulnerable" from "still vulnerable" (P1).
+    interesting = [change for change in changes if change.action != "seen"] + removed
+    pipeline.apply_storage_policy()
+    for change in interesting:
+        pipeline.process(change.as_event(utcnow_iso(), pipeline.host))
+    pipeline.finish()
+    scan["events"] = len(interesting)
+    scan["alerts"] = pipeline.stats.alerts
+    return scan
 
 
 def cmd_osv_sync(args: argparse.Namespace) -> int:
@@ -551,10 +574,10 @@ def cmd_selftest(args: argparse.Namespace) -> int:
         failures.extend(errors)
     if len(ruleset) == 0:
         failures.append("no rules loaded")
-    fixture = find_data(DEFAULT_FIXTURE, args.fixture, env_key="DAMAVIK_FIXTURE")
+    fixture = find_data(DEFAULT_FIXTURE, args.fixture)
     if not os.path.exists(fixture):
         failures.append(f"demo fixture missing: {fixture}")
-        failures.append(data_hint(DEFAULT_FIXTURE, "DAMAVIK_FIXTURE"))
+        failures.append(data_hint(DEFAULT_FIXTURE))
         _emit({"ok": False, "failures": failures}, args.json, "selftest FAILED")
         return 1
     import tempfile
@@ -632,7 +655,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
     from .replay import expand
 
-    fixture = find_data(DEFAULT_FIXTURE, args.fixture, env_key="DAMAVIK_FIXTURE")
+    fixture = find_data(DEFAULT_FIXTURE, args.fixture)
     with open(fixture, encoding="utf-8") as handle:
         base_lines = [line for line in handle if line.strip()]
     if not base_lines:
@@ -687,10 +710,10 @@ def cmd_demo(args: argparse.Namespace) -> int:
     """Load the demo capture into a throwaway state dir and print what happened."""
     import tempfile
 
-    fixture = find_data(DEFAULT_FIXTURE, args.fixture, env_key="DAMAVIK_FIXTURE")
+    fixture = find_data(DEFAULT_FIXTURE, args.fixture)
     if not os.path.exists(fixture):
         print(f"missing fixture: {fixture}", file=sys.stderr)
-        print(data_hint(DEFAULT_FIXTURE, "DAMAVIK_FIXTURE"), file=sys.stderr)
+        print(data_hint(DEFAULT_FIXTURE), file=sys.stderr)
         return 1
     with tempfile.TemporaryDirectory() as tmp:
         cfg = Config(

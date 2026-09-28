@@ -18,7 +18,6 @@ from __future__ import annotations
 import json
 import os
 import secrets
-import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -29,7 +28,6 @@ from ..pkgwatch import PkgWatch
 from ..store import Store
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-MAX_BODY = 65536
 
 
 class Api:
@@ -159,7 +157,7 @@ def make_handler(api: Api, token: str) -> type[BaseHTTPRequestHandler]:
         server_version = "damavik/0.1"
         protocol_version = "HTTP/1.1"
 
-        def log_message(self, fmt: str, *args: Any) -> None:  # noqa: A002
+        def log_message(self, _fmt: str, *args: Any) -> None:
             pass
 
         # -- helpers -------------------------------------------------------
@@ -289,17 +287,3 @@ def serve(config: Config, *, token: str | None = None, store: Store | None = Non
         httpd.server_close()
         api.store.close()
     return 0
-
-
-def serve_in_thread(
-    config: Config, *, port: int = 0, token: str = "test-token"
-) -> tuple[Any, int, threading.Thread]:
-    """Start the dashboard on an ephemeral port for tests.  Returns (server, port, thread)."""
-    api = Api(config)
-    handler = make_handler(api, token)
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), handler)
-    httpd.daemon_threads = True
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
-    bound_port = int(httpd.server_address[1])
-    return httpd, bound_port, thread

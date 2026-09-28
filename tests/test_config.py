@@ -28,7 +28,10 @@ def test_defaults_are_local_only():
 
 def test_no_network_provider_is_on_by_default():
     cfg = Config()
-    for name in ("bazaar", "urlhaus", "abuseipdb", "otx", "vt"):
+    # These are the only network-capable providers that exist; see
+    # intel.providers_for.  A provider that is not implemented is not listed.
+    assert set(cfg.intel) == {"osv_mirror", "bazaar", "urlhaus"}
+    for name in ("bazaar", "urlhaus"):
         assert cfg.intel[name]["enabled"] is False, name
 
 
@@ -59,15 +62,15 @@ def test_bad_port_is_refused():
     assert any("port" in p for p in validate({"dashboard": {"port": 99999}}))
 
 
-def test_keyed_provider_without_key_is_refused(monkeypatch):
-    monkeypatch.delenv("ABUSEIPDB_KEY", raising=False)
-    problems = validate({"intel": {"abuseipdb": {"enabled": True, "key_env": "ABUSEIPDB_KEY"}}})
-    assert any("ABUSEIPDB_KEY" in p for p in problems)
+def test_a_provider_that_does_not_exist_is_a_hard_error():
+    """Configuring an unimplemented provider must fail, not be ignored.
 
-
-def test_keyed_provider_with_key_is_accepted(monkeypatch):
-    monkeypatch.setenv("ABUSEIPDB_KEY", "test")
-    assert validate({"intel": {"abuseipdb": {"enabled": True, "key_env": "ABUSEIPDB_KEY"}}}) == []
+    ``abuseipdb``/``otx``/``vt`` used to be accepted here and then never
+    constructed, so enabling one looked like it worked.
+    """
+    for name in ("abuseipdb", "otx", "vt", "virustotal"):
+        problems = validate({"intel": {name: {"enabled": True}}})
+        assert any("unknown configuration key" in p for p in problems), name
 
 
 def test_offline_disables_every_provider():

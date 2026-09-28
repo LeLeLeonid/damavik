@@ -24,10 +24,6 @@ def event(ts: str, pid: int = 1) -> str:
     )
 
 
-def line_for(lines: list[str], index: int = 0) -> dict:
-    return json.loads(list(lines)[index])
-
-
 def test_rebase_lands_the_newest_event_on_the_target_clock():
     lines = [
         event("2020-01-01T00:00:00.000Z"),

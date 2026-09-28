@@ -19,7 +19,7 @@ verdicts, ever" rule is enforced: a score with no reasons is a bug, and
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from .schema import entropy_ratio, longest_label
@@ -86,7 +86,6 @@ class Scorer:
     common_ports: frozenset[int] = DEFAULT_COMMON_PORTS
     entropy_ratio_threshold: float = 0.9
     entropy_min_len: int = 12
-    seen_tuples: dict[str, int] = field(default_factory=dict)
 
     @classmethod
     def from_config(cls, config: Any, store: Any = None) -> Scorer:

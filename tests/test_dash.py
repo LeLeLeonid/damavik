@@ -5,14 +5,26 @@
 from __future__ import annotations
 
 import json
+import threading
 import urllib.error
 import urllib.request
 
 import pytest
-from damavik.dash.server import Api, serve, serve_in_thread
+from damavik.dash.server import Api, make_handler, serve
 from damavik.pipeline import Pipeline
 
 TOKEN = "test-token"
+
+
+def serve_in_thread(config, *, port=0, token=TOKEN):
+    """Run the dashboard on an ephemeral port for the duration of a test."""
+    from http.server import ThreadingHTTPServer
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(Api(config), token))
+    httpd.daemon_threads = True
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    return httpd, int(httpd.server_address[1]), thread
 
 
 @pytest.fixture()

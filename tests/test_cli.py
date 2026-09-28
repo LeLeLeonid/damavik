@@ -312,9 +312,9 @@ def test_validate_accepts_an_unknown_type_but_records_it(cli, capsys, tmp_path):
     odd.write_text('{"ts":"2026-09-10T10:00:00Z","type":"future.event"}\n', encoding="utf-8")
     cli("validate", str(odd))
     assert "validated 1 lines" in capsys.readouterr().out
-    from damavik.normalize import read_file
+    from damavik.normalize import iter_jsonl, read_lines
 
-    event = next(iter(read_file(str(odd))))
+    event = next(iter(iter_jsonl(read_lines(str(odd)))))
     assert event["type"] == "sensor.meta"
     assert event["meta"]["original_type"] == "future.event"
 
@@ -347,6 +347,69 @@ def test_pkg_scan_and_list(cli, capsys):
     names = {pkg["name"] for pkg in payload["packages"]}
     assert "libfoo" in names
     assert any(item["name"] == "libfoo" for item in payload["vulnerable"])
+
+
+def test_pkg_scan_is_a_silent_baseline_then_emits_news(cli, capsys, tmp_path):
+    """DMK-V-001/002 select on pkg.event fields that only the scanner produces.
+
+    Nothing used to emit those rows, so on a live host the two package rules
+    could never fire - only a hand-written capture could trigger them.  The
+    first scan records the inventory silently (everything is "new" on a fresh
+    install); a later scan turns a genuinely new package into an event, a score
+    and an alert.
+    """
+    snapshot = tmp_path / "status"
+    snapshot.write_text(
+        "Package: libfoo\nStatus: install ok installed\nArchitecture: amd64\n"
+        "Version: 1.2.3\nDescription: example library with a parser\n",
+        encoding="utf-8",
+    )
+    cli("pkg-list", "--scan", "--dpkg-status", str(snapshot), "--osv-dir", OSV_DIR, "--json")
+    first = json.loads(capsys.readouterr().out)["scan"]
+    assert first["baseline"] is True
+    assert first["events"] == 0, "a first scan must not alert on the pre-installed OS"
+
+    snapshot.write_text(
+        snapshot.read_text(encoding="utf-8")
+        + "\nPackage: netcat-openbsd\nStatus: install ok installed\nArchitecture: amd64\n"
+        "Version: 1.226-1\nDescription: TCP/IP swiss army knife\n",
+        encoding="utf-8",
+    )
+    cli("pkg-list", "--scan", "--dpkg-status", str(snapshot), "--osv-dir", OSV_DIR, "--json")
+    second = json.loads(capsys.readouterr().out)["scan"]
+    assert second["baseline"] is False
+    assert second["events"] == 1, second
+    assert second["alerts"] >= 1, "a new network-capable package must alert"
+
+    cli("alerts", "--json")
+    alerts = json.loads(capsys.readouterr().out)
+    assert any(alert["rule"] == "DMK-V-002" for alert in alerts), [a["rule"] for a in alerts]
+
+    # A scan of an unchanged host stays quiet: no re-alerting on every poll.
+    cli("pkg-list", "--scan", "--dpkg-status", str(snapshot), "--osv-dir", OSV_DIR, "--json")
+    third = json.loads(capsys.readouterr().out)["scan"]
+    assert third["events"] == 0, third
+
+
+def test_pkg_scan_stores_and_journals_what_it_finds(cli, capsys, tmp_path):
+    """The scanner writes through the pipeline: index, journal, alerts."""
+    snapshot = tmp_path / "status"
+    snapshot.write_text("Package: a\nStatus: install ok installed\nVersion: 1\n", encoding="utf-8")
+    cli("pkg-list", "--scan", "--dpkg-status", str(snapshot), "--osv-dir", OSV_DIR, "--json")
+    capsys.readouterr()
+    snapshot.write_text(
+        snapshot.read_text(encoding="utf-8")
+        + "\nPackage: b\nStatus: install ok installed\nVersion: 1\n"
+        "Description: a network tool\n",
+        encoding="utf-8",
+    )
+    cli("pkg-list", "--scan", "--dpkg-status", str(snapshot), "--osv-dir", OSV_DIR, "--json")
+    capsys.readouterr()
+    cli("status", "--json")
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["events"] == 1
+    cli("verify", "--json")
+    assert json.loads(capsys.readouterr().out)["ok"] is True
 
 
 def test_osv_sync_reports_counts(cli, capsys):
@@ -438,19 +501,19 @@ def test_bench_works_from_any_directory(tmp_path, monkeypatch, capsys):
     assert report["events"] == 120
 
 
-def test_find_data_prefers_the_env_override(monkeypatch, tmp_path):
+def test_find_data_honours_an_explicit_override(tmp_path):
+    """An operator who names a path means it, even before it exists."""
     from damavik.cli import find_data
 
     target = tmp_path / "custom-rules"
+    assert find_data("rules", str(target)) == str(target)
     target.mkdir()
-    monkeypatch.setenv("DAMAVIK_RULES_DIR", str(target))
-    assert find_data("rules") == str(target)
+    assert find_data("rules", str(target)) == str(target)
 
 
 def test_find_data_returns_a_sensible_path_when_nothing_exists(monkeypatch, tmp_path):
     from damavik.cli import find_data
 
-    monkeypatch.delenv("DAMAVIK_RULES_DIR", raising=False)
     monkeypatch.chdir(tmp_path)
     assert find_data("definitely-not-here") == str(tmp_path / "definitely-not-here")
 

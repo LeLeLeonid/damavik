@@ -19,16 +19,10 @@ SPDX-License-Identifier = "GPL-3.0-only"
 # --- third-party / vendored content ---------------------------------------
 # Nothing is vendored. When something is, list it here with its own licence.
 
-# --- files REUSE cannot read a header from --------------------------------
-#
-# `osquery/packs/damavik.conf` is JSON (a `_comment` array carries the tags) and
-# REUSE's text scanner reads the licence expression as `GPL-3.0-only",` - quote
-# and comma included - so it is not a valid expression.  Its tags live in the
-# sidecar `osquery/packs/damavik.conf.license`, which REUSE does parse.
-# `LICENSES/GPL-3.0-only.txt` is a byte-for-byte copy of `LICENSE`: REUSE
-# requires the licence text under `LICENSES/<id>` as well.
-
 # --- files that are not copyrightable, or whose licence is not ours --------
+#
+# `LICENSES/GPL-3.0-only.txt` is a byte-for-byte copy of `LICENSE`: REUSE
+# requires the licence text under `LICENSES/<id>` as well as in `LICENSE`.
 
 [[annotations]]
 path = [".gitignore"]

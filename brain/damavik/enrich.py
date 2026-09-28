@@ -262,7 +262,6 @@ class IntelEnricher:
     def __init__(self, providers: list[Any], *, limit: int = 3) -> None:
         self.providers = list(providers)
         self.limit = limit
-        self.lookups = 0
 
     def __call__(self, event: dict[str, Any]) -> dict[str, Any]:
         targets: list[tuple[str, str]] = []
@@ -283,7 +282,6 @@ class IntelEnricher:
                 if not provider.supports(kind):
                     continue
                 verdict = provider.lookup(kind, value)
-                self.lookups += 1
                 if verdict.verdict in ("malicious", "suspicious"):
                     hits.append(verdict.as_dict())
                     tag = f"intel_{verdict.verdict}"

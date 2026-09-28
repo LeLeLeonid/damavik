@@ -46,21 +46,14 @@ def test_packaging_declares_the_vendored_data():
     assert "data/tests/fixtures/*.jsonl" in text, "the wheel would ship no demo capture"
 
 
-def test_lookup_order_puts_overrides_first_and_package_data_before_usr_share(monkeypatch, tmp_path):
+def test_lookup_order_is_cwd_then_checkout_then_package_then_usr_share(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("DAMAVIK_RULES_DIR", raising=False)
-    plain = cli.data_candidates("rules")
-    assert plain[0] == os.path.join(str(tmp_path), "rules")
+    order = cli.data_candidates("rules")
+    assert order[0] == os.path.join(str(tmp_path), "rules")
+    assert order[1] == str(REPO / "rules")
     vendored = str(VENDORED / "rules")
-    assert vendored in plain
-    assert plain.index(vendored) < plain.index("/usr/share/damavik/rules")
-
-    monkeypatch.setenv("DAMAVIK_RULES_DIR", str(tmp_path / "override"))
-    assert cli.data_candidates("rules")[0] == str(tmp_path / "override")
-    # A deliberate override is honoured verbatim, even before it exists.
-    assert cli.find_data("rules") == str(tmp_path / "override")
-    (tmp_path / "override").mkdir()
-    assert cli.find_data("rules") == str(tmp_path / "override")
+    assert vendored in order
+    assert order.index(vendored) < order.index("/usr/share/damavik/rules")
 
 
 def test_vendored_ruleset_loads_and_is_a_complete_ruleset():
